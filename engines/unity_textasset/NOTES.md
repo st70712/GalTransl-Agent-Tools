@@ -46,6 +46,11 @@
 - import 只重寫「有譯文變動」的 asset 檔；零翻譯導入不會產生任何檔案（verify 視為通過）。
 
 ## 踩過的坑
+0. **TMP 動態字型化的正確組合**（RJ01483219 實測）：`m_AtlasPopulationMode=1`＋`m_SourceFontFile` 指到內嵌 Font（跨檔要加 external）
+   ＋圖集 Texture2D `m_IsReadable=1`＋**`m_FreeGlyphRects` 清空**＋`m_IsMultiAtlasTexturesEnabled=1`。
+   少了「清空空位」會崩：建置時不可讀的圖集沒有 CPU 像素副本，事後改可讀旗標只騙過 TMP 的檢查，
+   `FontEngine.TryAddGlyphToTexture` 往舊圖集畫字時 null 指標存取（crash.dmp：UnityPlayer.dll 讀 0x0）。
+   清空後 TMP 會另開執行期新建的圖集。三個單項變體（只可讀／只動態／動態＋來源）都不崩、字仍 □，是二分出來的。
 1. `str.lstrip()` 不會去掉 BOM `﻿` → 判斷 JSON 開頭要先剝 BOM（一開始 0 張表被認出來）。
 2. 浮點數字面（見上）→ 15 張表有 1 張 dump 不一致，靠 `FloatText` 解決。
 3. `Name=` 不只出現在對話：`PlaySE`／`DrawBG` 的 `Arg1` 也是 `Name=<資產名>` → 規則必須限定 `when_command`。

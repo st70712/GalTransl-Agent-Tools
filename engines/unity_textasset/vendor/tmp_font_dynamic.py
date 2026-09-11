@@ -47,6 +47,9 @@ class Layout:
     multi_atlas_off: int = -1
     multi_atlas: int = -1
     atlas_size: tuple[int, int] = (0, 0)
+    used_rects: int = 0
+    free_off: int = -1
+    free_rects: int = 0
 
 
 def _str(raw: bytes, off: int) -> tuple[str, int]:
@@ -149,10 +152,19 @@ def parse(raw: bytes) -> Layout:
         raise ValueError(f"{name}: m_AtlasWidth/Height={aw}x{ah} 不合理（bool 對齊判斷可能錯）")
     if any(b not in (0, 1) for b in bools):
         raise ValueError(f"{name}: bool 欄位值不合理 {list(bools)}")
+    o += 16                                   # width height padding renderMode
+    used = struct.unpack_from("<I", raw, o)[0]
+    if used > 70000:
+        raise ValueError(f"{name}: m_UsedGlyphRects count={used} 不合理")
+    free_off = o + 4 + used * 16
+    free = struct.unpack_from("<I", raw, free_off)[0]
+    if free > 70000:
+        raise ValueError(f"{name}: m_FreeGlyphRects count={free} 不合理")
     return Layout(name=name, family=family, style=style, source_pptr_off=source_pptr_off, source_pptr=(fid, pid),
                   mode_off=mode_off, mode=mode, glyph_off=glyph_off, glyph_count=glyph_count,
                   char_off=char_off, char_count=char_count, atlas_pptrs=atlas,
-                  multi_atlas_off=multi_off, multi_atlas=bools[0], atlas_size=(aw, ah))
+                  multi_atlas_off=multi_off, multi_atlas=bools[0], atlas_size=(aw, ah),
+                  used_rects=used, free_off=free_off, free_rects=free)
 
 
 def find_font_objects(data_dir: Path) -> dict[str, tuple[str, int, int]]:
@@ -201,6 +213,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--assets", default="sharedassets0.assets", help="TMP_FontAsset 所在的 asset 檔")
     ap.add_argument("--fonts", nargs="*", help="要改的 TMP_FontAsset 名稱（預設：family 在內嵌 Font 裡找得到的全部）")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--no-readable", action="store_true", help="不改圖集 Texture2D 的可讀旗標（二分崩潰原因用）")
+    ap.add_argument("--no-source", action="store_true", help="不設 m_SourceFontFile（保持 null；二分用）")
+    ap.add_argument("--only-readable", action="store_true", help="只改圖集可讀，不動字型資產（二分用）")
+    ap.add_argument("--keep-free-rects", action="store_true",
+                    help="保留舊圖集的 m_FreeGlyphRects（預設清空：舊圖集在建置時不可讀、沒有 CPU 像素副本，讓 TMP 往裡面畫字會 null 存取崩潰；"
+                         "清空後 TMP 會改開一張執行期新建的圖集）")
     args = ap.parse_args(argv)
 
     data_dir = find_data_dir(args.data)
@@ -229,7 +247,7 @@ def main(argv: list[str] | None = None) -> int:
         font_name = match_font(lay.family, fonts)
         wanted = (args.fonts is None and font_name is not None) or (args.fonts and lay.name in args.fonts)
         print(f"\n[{lay.name}] family={lay.family!r} style={lay.style!r} glyphs={lay.glyph_count} chars={lay.char_count} "
-              f"atlas={lay.atlas_size} mode={lay.mode} multi={lay.multi_atlas} source={lay.source_pptr} "
+              f"atlas={lay.atlas_size} mode={lay.mode} multi={lay.multi_atlas} source={lay.source_pptr} used={lay.used_rects} free={lay.free_rects} "
               f"atlases={lay.atlas_pptrs}  → 內嵌字型 {font_name!r}  {'改' if wanted else '略過'}")
         if not wanted:
             continue
@@ -237,20 +255,28 @@ def main(argv: list[str] | None = None) -> int:
             print("   ✗ 沒有對應的內嵌 Font，無法動態化")
             continue
         asset_rel, font_pid, _ = fonts[font_name]
-        fid = 0 if asset_rel == args.assets else ensure_external(sf, asset_rel)
+        fid = 0 if (asset_rel == args.assets or args.no_source or args.only_readable) else ensure_external(sf, asset_rel)
         new = bytearray(raw)
-        struct.pack_into("<iq", new, lay.source_pptr_off, fid, font_pid)
-        struct.pack_into("<i", new, lay.mode_off, 1)
-        new[lay.multi_atlas_off] = 1
-        print(f"   m_SourceFontFile → ({fid}, {font_pid})  m_AtlasPopulationMode 0→1  multiAtlas → 1")
-        if not args.dry_run:
-            o.set_raw_data(bytes(new))
+        if not args.only_readable:
+            if not args.no_source:
+                struct.pack_into("<iq", new, lay.source_pptr_off, fid, font_pid)
+            struct.pack_into("<i", new, lay.mode_off, 1)
+            new[lay.multi_atlas_off] = 1
+            note = ""
+            if not args.keep_free_rects and lay.free_rects:
+                new = new[:lay.free_off] + struct.pack("<I", 0) + new[lay.free_off + 4 + lay.free_rects * 16:]
+                note = f"  m_FreeGlyphRects {lay.free_rects}→0（used {lay.used_rects}）"
+            print(f"   m_SourceFontFile → {'（保持原值）' if args.no_source else (fid, font_pid)}  m_AtlasPopulationMode 0→1  multiAtlas → 1{note}")
+            if not args.dry_run:
+                o.set_raw_data(bytes(new))
         for f_id, pid in lay.atlas_pptrs:
             if f_id == 0:
                 atlas_ids.add(pid)
         patched += 1
     # 圖集可讀
     for o in env.objects:
+        if args.no_readable:
+            break
         if o.type.name == "Texture2D" and o.path_id in atlas_ids:
             tt = o.read_typetree()
             print(f"   Texture2D #{o.path_id} {tt.get('m_Name')!r} {tt.get('m_Width')}x{tt.get('m_Height')} readable {tt.get('m_IsReadable')} → True")
