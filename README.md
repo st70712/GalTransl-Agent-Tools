@@ -52,7 +52,7 @@ tests/               unittest（純標準庫）：$PY -m unittest discover -s te
 ## 設定
 
 `config.yaml`：GalTransl 位置、兩個直譯器路徑、llama-server 與模型路徑、endpoint、ctx／並行數／GPU。環境變數 `GALTRANSL_ROOT`、`AGT_*` 可覆蓋。
-不新建 conda 環境、不 pip install；`engines/*/vendor/**` 不修改。
+不動 conda 環境；引擎需要套件時在 profile.json 宣告 `python_env` 並用 `tools/setup_env.sh <engine>` 建專用 venv；`engines/*/vendor/**` 不修改。
 
 ## 文件
 
