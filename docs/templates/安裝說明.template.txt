@@ -1,0 +1,51 @@
+{game_title}　繁體中文補丁{version_note}
+=========================================================
+
+翻譯 {translated}/{total} 條（{percent}%）。
+未翻的 {untranslated} 條裡，玩家看得到的日文只剩 **{visible_untranslated} 條**，其餘是純符號、純控制碼、
+純 ASCII 代號，以及玩家看不到的除錯訊息。
+
+
+安裝
+----
+
+1. 進到遊戲目錄{target_dir_note}
+
+2. 備份原始檔案（**這步不要跳過**，出問題就靠它還原）：
+
+{backup_lines}
+
+3. 把本資料夾的下列檔案複製進去：
+
+{deliverable_lines}
+
+4. 執行 {exe}
+
+還原：把 .orig 改回原名蓋回去，就完全回到原狀。
+本補丁沒有動遊戲目錄裡的任何其他檔案。
+
+{variant_note}
+
+
+刻意保留日文的 {visible_untranslated} 條
+--------------------
+
+{untranslated_reasons}
+
+
+已知的小瑕疵
+------------
+
+{known_defects}
+
+
+請幫忙留意
+----------
+
+{acceptance_checklist}
+
+
+本機已驗證的項目
+----------------
+
+{verification_log}

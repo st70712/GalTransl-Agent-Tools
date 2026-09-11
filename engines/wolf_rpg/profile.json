@@ -1,0 +1,166 @@
+{
+  "_doc": "WOLF RPG Editor（ウディタ）。正則逐字抄自 vendor/fix_cp950.py:44-53 與 vendor/translate_wolf.py:35-49；tests/test_profile.py 會檢查兩邊一致。",
+  "schema_version": 1,
+  "name": "wolf_rpg",
+  "display_name": "WOLF RPG Editor",
+  "aliases": [
+    "wolf",
+    "wolfrpg",
+    "wolf_rpg_editor",
+    "ウディタ"
+  ],
+  "variants": {
+    "_doc": "2.x（Game.exe、單一 Data.wolf、CP932）要寫成 Big5 並設語言標記；3.x（GamePro.exe、Data/*.wolf、UTF-8）直接寫繁中，語言標記不動。",
+    "2.x": {
+      "source_encoding": "cp932",
+      "target_encoding": "cp950",
+      "language_marker": "zh-tw",
+      "exe": "Game.exe"
+    },
+    "3.x": {
+      "source_encoding": "utf-8",
+      "target_encoding": "utf-8",
+      "language_marker": null,
+      "exe": "GamePro.exe"
+    }
+  },
+  "detection": {
+    "files_any": [
+      "Game.exe",
+      "GamePro.exe"
+    ],
+    "globs_any": [
+      "Data.wolf",
+      "*/Data.wolf",
+      "Data/BasicData.wolf",
+      "*/Data/BasicData.wolf"
+    ],
+    "magic": [
+      {
+        "glob": "**/*.wolf",
+        "offset": 0,
+        "hex": "4458",
+        "_doc": "DXA 封包開頭 'DX'（wolfrpg/dxa.py）"
+      }
+    ],
+    "negative_files": [
+      "www/data/System.json",
+      "data/System.json"
+    ]
+  },
+  "contexts": {
+    "_doc": "priority 取自 translate_wolf.py:56-66；default: translate=預設翻、optional=要 --include-optional、skip=不翻。",
+    "dialog": {
+      "priority": 1,
+      "default": "translate",
+      "description": "對話訊息（指令 101）"
+    },
+    "choice": {
+      "priority": 2,
+      "default": "translate",
+      "description": "選項（指令 102）"
+    },
+    "picture_text": {
+      "priority": 3,
+      "default": "translate",
+      "description": "文字模式的圖片顯示（指令 150），技能說明等 UI 文字"
+    },
+    "call_arg": {
+      "priority": 4,
+      "default": "translate",
+      "description": "傳給公共事件的字串引數（指令 210/300）；對話框上方的說話者名字牌就是這個"
+    },
+    "database": {
+      "priority": 5,
+      "default": "translate",
+      "description": "資料庫字串欄位（道具／技能／武器名稱與說明）"
+    },
+    "game_title": {
+      "priority": 6,
+      "default": "skip",
+      "reason": "翻了會改變 Game.dat 長度，遊戲開不起來（README 踩坑 3）"
+    },
+    "string_var": {
+      "priority": 20,
+      "default": "optional",
+      "risky": true,
+      "description": "字串變數指派（指令 122），會影響行為"
+    },
+    "condition": {
+      "priority": 21,
+      "default": "optional",
+      "risky": true,
+      "requires_counterpart": true,
+      "description": "字串比較運算元（指令 112）；只翻「原文也出現在其他 context」的，否則分支永遠不觸發"
+    },
+    "debug": {
+      "priority": 99,
+      "default": "skip",
+      "description": "除錯訊息（指令 106），玩家看不到"
+    }
+  },
+  "control_codes": {
+    "_doc": "多字母碼必須排在單字母前（cself 在 c 前、sp 在 s 前），用精確列舉而非 \\\\[A-Za-z]+，否則 \\EBADEND 會把內文吃掉。",
+    "case_insensitive": false,
+    "value_codes": "\\\\(?:cself\\[[^\\]]*\\]|self\\[[^\\]]*\\]|cdb\\[[^\\]]*\\]|udb\\[[^\\]]*\\]|sdb\\[[^\\]]*\\]|v\\[[^\\]]*\\]|r\\[[^\\]]*\\])",
+    "style_codes": "\\\\(?:space\\[[^\\]]*\\]|font\\[[^\\]]*\\]|sp\\[[^\\]]*\\]|ax\\[[^\\]]*\\]|ay\\[[^\\]]*\\]|c\\[[^\\]]*\\]|f\\[[^\\]]*\\]|s\\[[^\\]]*\\]|E|[><.!^|-])",
+    "leading_codes": "^(?:\\\\(?:cself\\[[^\\]]*\\]|self\\[[^\\]]*\\]|cdb\\[[^\\]]*\\]|udb\\[[^\\]]*\\]|sdb\\[[^\\]]*\\]|space\\[[^\\]]*\\]|font\\[[^\\]]*\\]|sp\\[[^\\]]*\\]|ax\\[[^\\]]*\\]|ay\\[[^\\]]*\\]|c\\[[^\\]]*\\]|f\\[[^\\]]*\\]|v\\[[^\\]]*\\]|s\\[[^\\]]*\\]|r\\[[^\\]]*\\]|E|[><.!^|-]))+",
+    "stray_escape": "\\\\[a-zA-Z]"
+  },
+  "placeholders": [],
+  "symbol_map": {
+    "ー": "～",
+    "・": "‧",
+    "♪": "～",
+    "〜": "～",
+    "ｰ": "～",
+    "嘞": "啦",
+    "吡": "嗶",
+    "咔": "喀"
+  },
+  "_symbol_map_doc": "只在目標編碼是 Big5/cp950 時使用（Big5 收不到這些字）；utf-8 下 fix_text 會自動關閉。",
+  "literal_newline_policy": "convert_if_original_lacks",
+  "line_count_policy": "warn",
+  "japanese_detection": "kana_or_kanji",
+  "never_export": [
+    "素材路徑（png/jpg/ogg/mp3/wav/ttf/sav…）——檔案載入會失敗",
+    "SetLabel / JumpLabel（指令 212/213）——跳躍目標對不上",
+    "CommonEventByName（指令 300）的第一個字串參數（事件名）；第二個之後是引數，要翻",
+    "地圖事件名稱、公共事件名稱——被名稱呼叫",
+    "開發者註解（指令 103）——玩家看不到",
+    "資料庫中非「字串」型別的欄位——檔名／資料庫參照"
+  ],
+  "patch": {
+    "font": "Microsoft Yahei UI Bold",
+    "_font_doc": "內建日文字型缺常用漢字；使用者實測偏好 Yahei（JhengHei 也可用）。set_font.py 以 NUL 補滿原欄位，新名稱不能比原欄位長。",
+    "steps": [
+      "restore_pristine_game_dat",
+      "set_language_marker",
+      "set_font",
+      "repack_from_original",
+      "write_install_notes"
+    ],
+    "deliverables": {
+      "2.x": [
+        "Data.wolf"
+      ],
+      "3.x": [
+        "BasicData.wolf",
+        "MapData.wolf"
+      ]
+    }
+  },
+  "acceptance_checklist": [
+    "遊戲開得起來（新封包形式與原封包一致）",
+    "對話框、選項顯示中文，不是方框",
+    "對話框上方的說話者名字牌有人名（call_arg）",
+    "純符號台詞（……。）不是方框",
+    "訊息框行數沒被撐爆",
+    "字型沒有缺字",
+    "會做字串比對的分支（難度選擇／裝備／道具使用）仍能觸發"
+  ],
+  "docs": [
+    "engines/wolf_rpg/vendor/README.md",
+    "engines/wolf_rpg/NOTES.md"
+  ]
+}

@@ -1,0 +1,211 @@
+{
+  "_doc": "RPG Maker MV/MZ（www/data 或 data 下的 JSON）。contexts 取自 vendor/export_script.py CONTEXT_TYPES，優先級與預設跳過取自 GalTransl/text/translate_rpgmaker.py:56-85（使用者慣用 --priority 7 只翻到 actor）。",
+  "schema_version": 1,
+  "name": "rpgmaker_mv_mz",
+  "display_name": "RPG Maker MV / MZ",
+  "aliases": [
+    "rpgmaker",
+    "rpgmaker_mv",
+    "rpgmaker_mz",
+    "mv",
+    "mz",
+    "rmmv",
+    "rmmz"
+  ],
+  "variants": {
+    "MV": {
+      "source_encoding": "utf-8",
+      "target_encoding": "utf-8",
+      "data_dir": "www/data",
+      "core_js": "js/rpg_core.js"
+    },
+    "MZ": {
+      "source_encoding": "utf-8",
+      "target_encoding": "utf-8",
+      "data_dir": "data",
+      "core_js": "js/rmmz_core.js"
+    }
+  },
+  "detection": {
+    "files_any": [
+      "www/data/System.json",
+      "data/System.json"
+    ],
+    "evidence_files": {
+      "www/js/rpg_core.js": "MV",
+      "js/rpg_core.js": "MV",
+      "js/rmmz_core.js": "MZ",
+      "www/index.html": "MV",
+      "package.json": ""
+    },
+    "negative_files": [
+      "Data.wolf",
+      "Game.rgss3a"
+    ]
+  },
+  "contexts": {
+    "dialog": {
+      "priority": 1,
+      "default": "translate",
+      "description": "對話文本（101+401）"
+    },
+    "choice": {
+      "priority": 2,
+      "default": "translate",
+      "description": "選項文本（102）；if(s[xxx]) 條件由導入工具自動補回"
+    },
+    "scroll_text": {
+      "priority": 3,
+      "default": "translate",
+      "description": "滾動文字（405）"
+    },
+    "message": {
+      "priority": 4,
+      "default": "translate",
+      "description": "系統訊息（terms.messages），保留 %1 %2 佔位符"
+    },
+    "command": {
+      "priority": 5,
+      "default": "translate",
+      "description": "選單指令（terms.commands）"
+    },
+    "game_title": {
+      "priority": 6,
+      "default": "translate",
+      "description": "遊戲標題"
+    },
+    "actor": {
+      "priority": 7,
+      "default": "translate",
+      "description": "角色名／暱稱／簡介"
+    },
+    "skill": {
+      "priority": 8,
+      "default": "translate"
+    },
+    "item": {
+      "priority": 9,
+      "default": "translate"
+    },
+    "weapon": {
+      "priority": 10,
+      "default": "translate"
+    },
+    "armor": {
+      "priority": 11,
+      "default": "translate"
+    },
+    "term": {
+      "priority": 12,
+      "default": "translate",
+      "description": "術語（terms.basic）"
+    },
+    "param": {
+      "priority": 13,
+      "default": "translate",
+      "description": "參數名（terms.params）"
+    },
+    "enemy": {
+      "priority": 14,
+      "default": "translate"
+    },
+    "state": {
+      "priority": 15,
+      "default": "translate"
+    },
+    "class": {
+      "priority": 16,
+      "default": "translate"
+    },
+    "map_name": {
+      "priority": 17,
+      "default": "translate",
+      "description": "地圖顯示名稱（displayName）"
+    },
+    "type_name": {
+      "priority": 18,
+      "default": "translate",
+      "description": "武器／防具／技能類型名稱"
+    },
+    "currency": {
+      "priority": 19,
+      "default": "translate",
+      "description": "貨幣單位"
+    },
+    "picture_name": {
+      "priority": 40,
+      "default": "optional",
+      "risky": true,
+      "description": "圖片檔名（231）；只有含日文的才導出，翻了要有對應的圖片檔"
+    },
+    "event_name": {
+      "priority": 41,
+      "default": "optional",
+      "description": "地圖事件名稱，開發者參考用"
+    },
+    "common_event_name": {
+      "priority": 42,
+      "default": "optional",
+      "description": "公共事件名稱，開發者參考用"
+    },
+    "plugin_command": {
+      "priority": 43,
+      "default": "optional",
+      "risky": true,
+      "description": "插件指令參數（356/357）"
+    },
+    "debug_name": {
+      "priority": 99,
+      "default": "skip",
+      "description": "開關／變數名稱，玩家看不到"
+    }
+  },
+  "control_codes": {
+    "_doc": "RPG Maker 控制碼不分大小寫（\\N[1] 與 \\n[1] 相同）。value 取自 export_script.py CONTROL_CODES 與 memory「翻譯器會破壞控制碼」；leading 只摘純表現碼，\\N[1] 是句子主詞不能摘。",
+    "case_insensitive": true,
+    "value_codes": "\\\\(?:N\\[\\d+\\]|P\\[\\d+\\]|V\\[\\d+\\]|G|I\\[\\d+\\])",
+    "style_codes": "\\\\(?:C\\[\\d+\\]|FS\\[\\d+\\]|PX\\[\\d+\\]|PY\\[\\d+\\]|\\{|\\}|\\$|\\.|\\||!|>|<|\\^)",
+    "leading_codes": "^(?:\\\\(?:C\\[\\d+\\]|FS\\[\\d+\\]|PX\\[\\d+\\]|PY\\[\\d+\\]|\\{|\\}|\\$|\\.|\\||!|>|<|\\^))+",
+    "stray_escape": "\\\\[a-zA-Z]"
+  },
+  "placeholders": [
+    "%\\d"
+  ],
+  "_placeholders_doc": "terms.messages 的 %1 %2 是執行期替換的佔位符，遺失視同帶值控制碼遺失。",
+  "symbol_map": {},
+  "literal_newline_policy": "revert",
+  "line_count_policy": "warn",
+  "japanese_detection": "kana_or_kanji",
+  "never_export": [
+    "402（選項分支標頭）、108/408（註解）、355/655（腳本）、320/324（改名）不抽取",
+    "沒有前導 101 的裸 401 不抽取（vendor 已知限制）",
+    "圖片檔名（231）只在含日文時導出為 picture_name，翻了必須同時改圖片檔名",
+    "開關／變數名稱（debug_name）玩家看不到"
+  ],
+  "patch": {
+    "steps": [
+      "copy_changed_json",
+      "write_install_notes"
+    ],
+    "_font_doc": "MV: fonts/gamefont.css 指定字型；MZ: System.json advanced.mainFontFilename。缺字要先量測再決定要不要換。",
+    "deliverables": {
+      "MV": [
+        "www/data/*.json"
+      ],
+      "MZ": [
+        "data/*.json"
+      ]
+    }
+  },
+  "acceptance_checklist": [
+    "遊戲開得起來，沒有 Loading Error（圖片檔名沒被污染）",
+    "對話、選項顯示中文，多行對話沒被截斷",
+    "\\N[n]／\\V[n] 顯示的是角色名／數值而不是字面碼",
+    "選單指令、道具／技能名稱與說明",
+    "字型有沒有缺字"
+  ],
+  "docs": [
+    "engines/rpgmaker_mv_mz/vendor/README.md",
+    "engines/rpgmaker_mv_mz/NOTES.md"
+  ]
+}

@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-and-test:
+    name: ruff + unittest（純標準庫，RPG Maker 示範語料全管線）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ruff
+        run: pip install ruff
+      - name: ruff check（engines/*/vendor 已排除）
+        run: ruff check .
+      - name: unittest
+        env:
+          AGT_PYTHON_STDLIB: python
+        run: python -m unittest discover -s tests -v

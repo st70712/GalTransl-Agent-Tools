@@ -1,0 +1,26 @@
+# 遊戲專案工作目錄：只保留說明檔，其餘（原始遊戲、解包、導出、譯文、交付物）都不進 git
+projects/*
+!projects/README.md
+
+# 執行紀錄與暫存
+logs/
+tests/_scratch/
+__pycache__/
+*.pyc
+.ruff_cache/
+.pytest_cache/
+
+# translate.py / fix_text.py 產生的工作檔
+.galtransl/
+.agt_checkpoint.json
+.script_checkpoint.json
+*.backup-*.json
+
+# 備份與大型二進位
+*.orig
+*.bak
+*.wolf
+*.gguf
+*.zip
+*.7z
+*.rar

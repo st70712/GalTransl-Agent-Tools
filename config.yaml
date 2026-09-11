@@ -1,0 +1,20 @@
+# GalTransl-Agent-Tools 工作區設定（扁平 key: value，core/config.py 用標準庫解析）
+# 環境變數優先：GALTRANSL_ROOT、AGT_PYTHON_STDLIB、AGT_PYTHON_NLLB、AGT_ENDPOINT、AGT_LLAMA_GPU ...
+
+# GalTransl 框架（提供 Sakura 後端、CGptDict）
+galtransl_root: /raid/home/jimhsieh/GalTransl
+
+# 純標準庫工具用的 Python（core/、agt.py、engines/、check_codes.py、tests/）
+python_stdlib: /raid/home/jimhsieh/miniconda3/envs/galtransl/bin/python
+# 翻譯與 opencc 步驟用的 Python（tools/translate.py、tools/fix_text.py）
+python_nllb: /raid/home/jimhsieh/miniconda3/envs/nllb-env/bin/python
+
+# 本機翻譯模型伺服器
+llama_server_bin: /raid/home/jimhsieh/GalTransl/llama.cpp/build/bin/llama-server
+model_gguf: /raid/home/jimhsieh/GalTransl/models/Sakura-GalTransl-14B-v3/Sakura-Galtransl-14B-v3.8.gguf
+endpoint: http://127.0.0.1:8080
+llama_host: 127.0.0.1
+llama_port: 8080
+llama_ctx: 32768
+llama_np: 16
+llama_gpu: auto
