@@ -55,8 +55,9 @@
    TMP 通過可讀檢查後第一次呼叫 `FontEngine.TryAddGlyphToTexture` 就拿舊圖集的 CPU 資料指標，串流在 .resS 的圖集沒有 CPU 副本 → null。
    結論：**只改 m_IsReadable 旗標不夠，圖集像素必須內嵌在 .assets 裡**（Unity 自己建置可讀貼圖時也是內嵌、不串流）。
    `tmp_font_dynamic.py --inline-atlas` 會把 .resS 的像素搬進 Texture2D 的 image data 並清空 m_StreamData（變體 H，.assets 變大 32 MB）。
-   備案 G：清空 glyph／character 表、圖集換成 1×1 內嵌佔位，讓 TMP 走「width<=1 → Reinitialize + ResetAtlasTexture」全動態路徑
-   （編輯器建的動態字型就是這樣出廠；本 build 的 metadata 有這兩個方法）。
+   **變體 H 實機通過（2026-09-11 23:30）**：戶／溫／另 正常顯示，遊戲穩定。`agt package` 現在會自動跑這一步（profile `patch.tmp_dynamic_font`）。
+   OTF 本身沒有的字（嗯 等 48 個）用 `projects/<game>/charset_map.json` 替字（fix_text 自動套用）。
+   備案 G（未用到）：清空 glyph／character 表、圖集換成 1×1 內嵌佔位，讓 TMP 走「width<=1 → Reinitialize + ResetAtlasTexture」全動態路徑。
 1. `str.lstrip()` 不會去掉 BOM `﻿` → 判斷 JSON 開頭要先剝 BOM（一開始 0 張表被認出來）。
 2. 浮點數字面（見上）→ 15 張表有 1 張 dump 不一致，靠 `FloatText` 解決。
 3. `Name=` 不只出現在對話：`PlaySE`／`DrawBG` 的 `Arg1` 也是 `Name=<資產名>` → 規則必須限定 `when_command`。

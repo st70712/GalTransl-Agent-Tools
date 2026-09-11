@@ -61,3 +61,12 @@ Wolf `condition` 與其對應方（`string_var`／`database`／`choice`）被翻
 
 `core/merge.by_text()`：以原文字串為鍵（位置會全變），原文完全相同才套、帶值碼不能少也不能多、`condition` 孤兒不套、`game_title` 不套。
 上次試玩版→正式版接續 10250 條（45%），人名／道具名／選項因此與已實機驗證的版本一致。
+
+
+## 字型缺字（fix_text 的字元集檢查）
+
+遊戲字型的字元集存成 `projects/<game>/font_charset.txt`（每個字一個字元；Unity 用 fonttools 讀內嵌 OTF 的 cmap，
+Wolf 用 cp950 可編碼集，TMP 靜態圖集用字元表），`tools/fix_text.py` 在專案佈局下會自動載入：
+不在字元集裡的字 → 先查 `projects/<game>/charset_map.json`（人工替字，如 `嗯→恩`）→ 再試 opencc `t2jp`
+（繁→日文字形：值→値、啟→啓、鄉→郷）→ 都不行就列出來（遊戲裡會是 □）給人補進替字表。
+`--charset`／`--charset-map` 可手動指定，`--no-charset` 關閉。

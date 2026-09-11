@@ -144,10 +144,22 @@ class UnityTextAssetAdapter(StandardCliAdapter):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def font_step(self, p: Project) -> StepResult:
+        """profile.patch.tmp_dynamic_font：把 TMP 靜態字型資產改成動態造字，輸出到 translated/。"""
+        cfg = self.profile.patch.get("tmp_dynamic_font") or {}
+        if not cfg.get("enabled", False):
+            return StepResult(ok=True, summary="tmp_dynamic_font 未啟用")
+        cmd = [self.python, self.vendor("tmp_font_dynamic.py"), self.data_dir(p.extracted), "-o", p.translated,
+               "--assets", cfg.get("assets", "sharedassets0.assets"), *cfg.get("args", [])]
+        return self.run(cmd, log_name="tmp_font_dynamic", logs_dir=p.logs)
+
     def package(self, p: Project) -> StepResult:
         m = p.match()
         if not p.translated.exists() or not any(p.translated.rglob("*")):
             return StepResult(ok=False, summary="translated/ 是空的：沒有任何譯文變動，或尚未 import")
+        r = self.font_step(p)
+        if not r.ok:
+            return r
         changed = [x for x in p.translated.rglob("*") if x.is_file()]
         if p.out.exists():
             shutil.rmtree(p.out)
@@ -168,7 +180,8 @@ class UnityTextAssetAdapter(StandardCliAdapter):
             deliverables=[f"{rel}  ← 覆蓋遊戲目錄同路徑（原檔先改名 .orig）" for rel in rels],
             backup_lines=[f"ren {rel.replace('/', chr(92))} {Path(rel).name}.orig" for rel in rels],
             exe=exe, target_dir_note=f"（{exe} 所在的資料夾）",
-            variant_note="本補丁只改文字資料（TextAsset）；若中文顯示成方框，是內建 TextMeshPro 字型缺字，請回報缺的字。",
+            variant_note=("resources.assets 是文字資料；sharedassets0.assets 是把 TextMeshPro 字型改成動態造字（用遊戲內嵌的 NotoSansJP 字型檔即時產生缺字）。"
+                          "兩個檔案要一起換。若仍有個別字顯示成方框，是內嵌字型檔本身沒有那個字，請回報。"),
             verification_log=[f"{len(rels)} 個 asset 檔有變動；verify 逐物件比對通過（非文字物件 raw 相同）",
                               "往返驗證（逐物件）與破壞攔截通過"],
         )

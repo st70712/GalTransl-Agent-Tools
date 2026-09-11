@@ -115,17 +115,29 @@
   "patch": {
     "steps": [
       "copy_changed_assets",
+      "tmp_dynamic_font",
       "write_install_notes"
     ],
     "deliverables": {
       "il2cpp": [
-        "*_Data/resources.assets"
+        "*_Data/resources.assets",
+        "*_Data/sharedassets0.assets（動態字型）"
       ],
       "mono": [
-        "*_Data/resources.assets"
+        "*_Data/resources.assets",
+        "*_Data/sharedassets0.assets（動態字型）"
       ]
     },
-    "font_doc": "TextMeshPro 字型圖集（sharedassets0 的 TMP_FontAsset）若是靜態圖集，缺字會顯示方框；smoke build 必看。"
+    "font_doc": "TextMeshPro 字型圖集（sharedassets0 的 TMP_FontAsset）若是靜態圖集，缺字會顯示方框；smoke build 必看。",
+    "tmp_dynamic_font": {
+      "_doc": "agt package 時執行 vendor/tmp_font_dynamic.py：把 family 在內嵌 Font 找得到的 TMP 字型資產改成動態造字（圖集像素內嵌可讀）。RJ01483219 實機驗證通過（變體 H）。設 false 可關閉。",
+      "enabled": true,
+      "args": [
+        "--inline-atlas",
+        "--keep-free-rects"
+      ],
+      "assets": "sharedassets0.assets"
+    }
   },
   "acceptance_checklist": [
     "遊戲開得起來（UnityPy 重新序列化的 resources.assets 被接受）",

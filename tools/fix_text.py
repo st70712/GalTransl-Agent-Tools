@@ -12,6 +12,9 @@
 4. 字面 \\n：依 profile.literal_newline_policy（convert_if_original_lacks → 換成真換行；revert → 退回原文；keep）
 5. 控制碼把關（core/codes.py）：認不得的反斜線序列／帶值碼遺失或多出／佔位符遺失 → 退回原文；表現碼遺失只報告
 6. 目標編碼檢查
+7. 字型字元集檢查（選用）：`--charset` 給遊戲字型的字元集檔（每個字一個字元，例如 projects/<game>/font_charset.txt，
+   專案佈局下自動偵測）；不在字元集裡的字先查 `--charset-map`（JSON {"嗯":"恩"}，自動偵測 projects/<game>/charset_map.json），
+   再試 opencc t2jp（繁→日文字形，例如 值→値、啟→啓），都不行的列出來給人決定。
 
 寫檔前會先備份成 script.backup-<時間>.json（--no-backup 關閉）。
 """
@@ -87,6 +90,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-symbol-map", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="只報告，不寫檔")
     ap.add_argument("--no-backup", action="store_true")
+    ap.add_argument("--charset", type=Path, help="遊戲字型的字元集檔（預設自動找 projects/<game>/font_charset.txt）")
+    ap.add_argument("--charset-map", type=Path, help="缺字替字表 JSON（預設自動找 projects/<game>/charset_map.json）")
+    ap.add_argument("--no-charset", action="store_true", help="跳過字型字元集檢查")
     args = ap.parse_args(argv)
 
     profile, side = resolve_profile(args.script, args.engine)
@@ -184,6 +190,49 @@ def main(argv: list[str] | None = None) -> int:
             still_bad.append((e, bad))
             char_counter.update(bad)
 
+    # 7. 字型字元集檢查
+    project_root = args.script.resolve().parent.parent
+    charset_path = args.charset or (project_root / "font_charset.txt" if (project_root / "font_charset.txt").exists() else None)
+    unresolved: collections.Counter = collections.Counter()
+    unresolved_examples: dict[str, dict] = {}
+    if charset_path and not args.no_charset:
+        charset = set(charset_path.read_text(encoding="utf-8"))
+        map_path = args.charset_map or (project_root / "charset_map.json" if (project_root / "charset_map.json").exists() else None)
+        cmap: dict[str, str] = {k: v for k, v in (json.loads(map_path.read_text(encoding="utf-8")) if map_path else {}).items() if len(k) == 1}
+        t2jp = None
+        if not args.no_opencc:
+            try:
+                import opencc  # type: ignore
+                t2jp = opencc.OpenCC("t2jp")
+            except Exception:
+                t2jp = None
+        auto_map: dict[str, str] = {}
+        for e in translated:
+            if not e["translated"]:
+                continue
+            out_chars = []
+            for ch in e["translated"]:
+                if ord(ch) < 0x2E80 or ch in charset:
+                    out_chars.append(ch)
+                    continue
+                rep = cmap.get(ch)
+                if rep is None and t2jp is not None:
+                    cand = t2jp.convert(ch)
+                    if cand != ch and all(c in charset for c in cand):
+                        rep = cand
+                        auto_map[ch] = cand
+                if rep is not None:
+                    out_chars.append(rep)
+                    stats["缺字替換"] += 1
+                else:
+                    out_chars.append(ch)
+                    unresolved[ch] += 1
+                    unresolved_examples.setdefault(ch, e)
+            new = "".join(out_chars)
+            if new != e["translated"]:
+                e["translated"] = new
+        print(f"字型字元集: {charset_path}（{len(charset)} 字）  替字表: {map_path or '無'}  t2jp 自動: {len(auto_map)} 種 {''.join(f'{k}→{v}' for k, v in list(auto_map.items())[:12])}")
+
     print()
     for label, n in stats.most_common():
         print(f"  {label:<24}: {n}")
@@ -206,6 +255,12 @@ def main(argv: list[str] | None = None) -> int:
         print("  導入時可用 --skip-unencodable（Wolf）保留原文，或人工替換。")
     else:
         print(f"\n✅ 全部譯文都能以 {encoding} 寫回")
+
+    if unresolved:
+        print(f"\n字型沒有、也沒有替字的字（{len(unresolved)} 種，遊戲裡會是 □）— 加進 projects/<game>/charset_map.json 後重跑 fix_text：")
+        for ch, n in unresolved.most_common(40):
+            ex = unresolved_examples[ch]
+            print(f"  {ch} U+{ord(ch):04X} ×{n}   例 [{ex['index']}] {ex['translated'][:40]!r}")
 
     if args.dry_run:
         print("\n（dry-run，未寫檔）")

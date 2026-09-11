@@ -22,7 +22,7 @@ bash tools/llama_server.sh status || bash tools/llama_server.sh start
 $PYT tools/translate.py -i $S --limit 20 --log projects/<game>/logs/translate.log   # G6 小樣本
 # --- 使用者實機確認、mark user_boot_ok 之後 ---
 $PYT tools/translate.py -i $S --log projects/<game>/logs/translate.log             # G7，用 run_in_background 跑
-$PYT tools/fix_text.py $S                                  # s2twp、符號表、統一譯法、控制碼退回
+$PYT tools/fix_text.py $S                                  # s2twp、符號表、統一譯法、控制碼退回、字型缺字替換（projects/<game>/font_charset.txt）
 $PY  tools/check_codes.py $S                               # 任何 fatal → exit 1，先修再導入
 $PY  agt.py validate <game>
 ```
