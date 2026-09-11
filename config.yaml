@@ -1,4 +1,5 @@
 # GalTransl-Agent-Tools 工作區設定（扁平 key: value，core/config.py 用標準庫解析）
+# 這些是「這台機器」的路徑。搬到別的機器：改這裡（或用環境變數覆蓋），再對需要的引擎跑 tools/setup_env.sh。
 # 環境變數優先：GALTRANSL_ROOT、AGT_PYTHON_STDLIB、AGT_PYTHON_NLLB、AGT_ENDPOINT、AGT_LLAMA_GPU ...
 
 # GalTransl 框架（提供 Sakura 後端、CGptDict）
@@ -8,7 +9,7 @@ galtransl_root: /raid/home/jimhsieh/GalTransl
 python_stdlib: /raid/home/jimhsieh/miniconda3/envs/galtransl/bin/python
 # 翻譯與 opencc 步驟用的 Python（tools/translate.py、tools/fix_text.py）
 python_nllb: /raid/home/jimhsieh/miniconda3/envs/nllb-env/bin/python
-# Unity 引擎轉接器用的 Python（uv venv，含 UnityPy；建法見 engines/unity_textasset/NOTES.md）
+# （相容用）Unity 引擎的 venv；正式來源是 engines/unity_textasset/profile.json 的 python_env，用 tools/setup_env.sh 建
 python_unity: /raid/home/jimhsieh/GalTransl-Agent-Tools/.venv-unity/bin/python
 
 # 本機翻譯模型伺服器

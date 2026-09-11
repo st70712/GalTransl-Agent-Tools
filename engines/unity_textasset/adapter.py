@@ -12,14 +12,10 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from core import config, script_json
+from core import script_json
 from core.adapter import EngineMatch, Project, StandardCliAdapter, StepResult
 from core.install_notes import build_fields
 from core.install_notes import write as write_install_notes
-
-VENV_HINT = ("缺少 UnityPy 環境：在 repo 根目錄執行\n"
-             "  uv venv --python /raid/home/jimhsieh/miniconda3/envs/nllb-env/bin/python .venv-unity\n"
-             "  uv pip install --python .venv-unity/bin/python UnityPy")
 
 
 def _find_root(game_dir: Path, max_depth: int = 2) -> tuple[Path, Path] | None:
@@ -40,13 +36,6 @@ def _find_root(game_dir: Path, max_depth: int = 2) -> tuple[Path, Path] | None:
 class UnityTextAssetAdapter(StandardCliAdapter):
     name = "unity_textasset"
     roundtrip_mode = "bytes"
-
-    def __init__(self, python: str | None = None) -> None:
-        super().__init__(python)
-        unity_py = config.python_unity()
-        if not unity_py:
-            raise SystemExit(VENV_HINT)
-        self.python = unity_py            # 所有 vendored 腳本都用 UnityPy 環境跑
 
     # -- 偵測 ---------------------------------------------------------------
 

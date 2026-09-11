@@ -6,6 +6,7 @@
 ```bash
 PY=/raid/home/jimhsieh/miniconda3/envs/galtransl/bin/python     # 純標準庫工具
 PYT=/raid/home/jimhsieh/miniconda3/envs/nllb-env/bin/python     # translate.py / fix_text.py
+bash tools/setup_env.sh <engine>                                # 引擎有宣告 python_env 時先建它的 venv（轉接器會自動用）
 ```
 
 ## G0 辨識引擎
@@ -28,6 +29,9 @@ $PY agt.py prepare <game>
 - 封包內各種儲存形式（未壓縮／Huffman／LZ）的分布——打包時要照原樣（Wolf 踩坑 2）
 - 檔案數、含文字的檔案有哪些、字串總數
 - 各 context 的分布；抽幾條看內容是不是玩家看得到的文字
+- **字型覆蓋率**：找出遊戲實際用的字型與它的字元集（TTF/OTF 的 cmap、TMP 圖集的字元表、Big5 碼表），
+  對一份繁中語料算缺字率（`GalTransl-sister/exported_full/script.json` 有 19 萬字譯文可當語料）。
+  缺字率高就要在翻譯前決定對策（換字型／動態造字／替字表），不要等 smoke build 才看到 □。
 
 ## G2 往返驗證
 
@@ -37,6 +41,10 @@ $PY agt.py roundtrip <game>
 
 解析 → 寫回 → 比對。二進位格式要逐位元組相同（Wolf 17/17）；JSON 格式用 `json.load` 相等（RPG Maker）。
 **格式理解只要有一處在猜，這一步就會抓到。** 沒全過不准動文字。
+
+工具鏈重新序列化本來就不會逐位元組相同時（UnityPy 存 SerializedFile 少 23 KB 對齊／標頭，物件內容全同），
+關卡定義改為：**物件集合相同 + 每個物件 raw 相同 + 文字資產重新 dump 與原文相同**（`engines/unity_textasset/vendor/roundtrip_test.py`），
+並在 NOTES 註明「遊戲吃不吃要靠 G6 實機確認」——RJ01483219 實測遊戲接受 UnityPy 重存的 resources.assets。
 
 ## G3 導出並抽樣
 
@@ -78,6 +86,13 @@ $PY  agt.py package <game>
 
 交 `out/` 給使用者實機開啟。他回報 OK 後：`$PY agt.py mark <game> user_boot_ok`。
 上一次幾乎每個坑都是「翻完才發現」；這 20 分鐘的 smoke build 能省下數小時。
+
+- 樣本要落在一開遊戲就看得到的地方：`--filter Data_Event`（Unity）之類鎖定開場，不要讓 `--limit` 抓到冷門表。
+- 樣本要含原字型字元集以外的字（戶／溫／另／你／她…），smoke build 同時就是字型測試。
+- 要改引擎資產（字型資產、圖集、旗標）時**一次只改一件事**，產「單變數變體」放 `projects/<game>/variants/<字母>/`，
+  讓使用者二分；崩潰就要 crash.dmp（`%LOCALAPPDATA%\Temp\<公司>\<遊戲>\Crashes\`）或 Player.log
+  （`%USERPROFILE%\AppData\LocalLow\<公司>\<遊戲>\`；不一定存在），用 `.venv-unity` 的 `minidump` 解析例外位址落在哪個模組。
+- 交付超過 30 MiB 的檔案：zip，或放到 `~/gdrive/GalTransl-Agent-Tools/<game>/`（rclone 掛載）。
 
 ## G7 大量翻譯
 

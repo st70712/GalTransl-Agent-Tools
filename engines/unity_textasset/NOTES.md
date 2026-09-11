@@ -51,6 +51,12 @@
    少了「清空空位」會崩：建置時不可讀的圖集沒有 CPU 像素副本，事後改可讀旗標只騙過 TMP 的檢查，
    `FontEngine.TryAddGlyphToTexture` 往舊圖集畫字時 null 指標存取（crash.dmp：UnityPlayer.dll 讀 0x0）。
    清空後 TMP 會另開執行期新建的圖集。三個單項變體（只可讀／只動態／動態＋來源）都不崩、字仍 □，是二分出來的。
+   **更正（變體 F 仍崩，兩個 crash.dmp 例外位址與堆疊完全相同 UnityPlayer.dll+0xd982a3）**：清空空位沒有改變路徑，
+   TMP 通過可讀檢查後第一次呼叫 `FontEngine.TryAddGlyphToTexture` 就拿舊圖集的 CPU 資料指標，串流在 .resS 的圖集沒有 CPU 副本 → null。
+   結論：**只改 m_IsReadable 旗標不夠，圖集像素必須內嵌在 .assets 裡**（Unity 自己建置可讀貼圖時也是內嵌、不串流）。
+   `tmp_font_dynamic.py --inline-atlas` 會把 .resS 的像素搬進 Texture2D 的 image data 並清空 m_StreamData（變體 H，.assets 變大 32 MB）。
+   備案 G：清空 glyph／character 表、圖集換成 1×1 內嵌佔位，讓 TMP 走「width<=1 → Reinitialize + ResetAtlasTexture」全動態路徑
+   （編輯器建的動態字型就是這樣出廠；本 build 的 metadata 有這兩個方法）。
 1. `str.lstrip()` 不會去掉 BOM `﻿` → 判斷 JSON 開頭要先剝 BOM（一開始 0 張表被認出來）。
 2. 浮點數字面（見上）→ 15 張表有 1 張 dump 不一致，靠 `FloatText` 解決。
 3. `Name=` 不只出現在對話：`PlaySE`／`DrawBG` 的 `Arg1` 也是 `Name=<資產名>` → 規則必須限定 `when_command`。

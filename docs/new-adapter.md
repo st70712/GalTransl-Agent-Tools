@@ -12,6 +12,11 @@ $PY agt.py init <game> --original <遊戲目錄> --engine <engine>
 `_template/` 內容：`adapter.py`（繼承 `StandardCliAdapter`，留 `detect/prepare/package/breakage_test` TODO）、
 `profile.json`（全欄位骨架）、`NOTES.md`（固定標題）、`vendor/{export_script,import_script,roundtrip_test}.py`（標準 CLI 骨架）。
 
+**環境宣告**：vendor 腳本能用標準庫就用標準庫。真的需要第三方套件（UnityPy、fonttools…），在 `profile.json` 加
+`"python_env": {"venv": ".venv-<engine>", "requirements": "requirements.txt", "python": "3.12"}`，套件寫進 `engines/<engine>/requirements.txt`，
+`bash tools/setup_env.sh <engine>` 建環境；`StandardCliAdapter` 看到 `python_env` 會自動用那個直譯器跑 vendor 腳本，環境不存在會明確報錯。
+`.venv*` 不進 git，換機器重跑 `setup_env.sh` 即可。
+
 ## 1. 解包（prepare）
 
 - 能把封包解成檔案樹；每個檔案用檔頭 magic（PNG/OGG/TTF…）驗證解得對。
@@ -32,6 +37,10 @@ $PY agt.py init <game> --original <遊戲目錄> --engine <engine>
 JSON 類引擎可以沒有這支，`StandardCliAdapter.roundtrip()` 會改用零翻譯導入 + JSON 相等。
 **沒有 100% 不准往下。**
 
+若解析／寫回是靠第三方函式庫、且它重新序列化本來就不逐位元組相同（UnityPy），把關卡定義成
+「物件集合相同 + 每個物件內容相同 + 文字資產重新 dump 與原文相同」（見 `engines/unity_textasset/vendor/roundtrip_test.py`），
+並在 NOTES.md 註明遊戲吃不吃要靠 smoke build 實機確認；import 只重寫有變動的檔案，零翻譯導入就是「零輸出檔」。
+
 ## 4. 導出
 
 `vendor/export_script.py DATA -o OUT [-e ENC] [-s]` 產出 `script.json` + `format_specification.json`（格式見 `docs/script-json.md`）。
@@ -50,6 +59,15 @@ JSON 類引擎可以沒有這支，`StandardCliAdapter.roundtrip()` 會改用零
 
 `vendor/import_script.py verify DATA OUT`：比對「不該變的東西」——指令數／ID／縮排／整數參數、標籤、檔名、選項數、地圖尺寸、資料庫數值欄位。
 然後在 `adapter.breakage_test()` 刻意弄壞複本（改一個標籤、把檔名塞日文、刪一個選項），verify **必須失敗**；沒失敗代表安全網有洞。
+
+## 6.5 字型覆蓋率（在 smoke build 之前）
+
+找出遊戲顯示文字用的字型與字元集，對繁中語料算缺字率；缺字率高就先定對策。三種常見型態：
+- 引擎用系統字型（Wolf）：換成系統的繁中字型名稱（Yahei／JhengHei），注意欄位長度限制。
+- 內建 TTF/OTF（RPG Maker MV/MZ、Unity Font）：cmap 通常夠（NotoSansJP 覆蓋繁中 99%）；不夠就換字型檔。
+- **預先烤好的靜態圖集**（TextMeshPro SDF）：只有圖集裡的字能顯示；對策依序是改動態造字（需內嵌字型檔＋**圖集像素內嵌可讀**，
+  串流在 .resS 的圖集沒有 CPU 副本、改旗標會 null 崩潰）→ 全動態（清表＋1×1 佔位圖集）→ 離線烤新圖集。
+每個嘗試都做成單變數變體實機驗證，寫進 NOTES。
 
 ## 7. profile.json
 

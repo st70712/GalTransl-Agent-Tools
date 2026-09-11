@@ -2,7 +2,7 @@
 
 profile 是每個引擎的**單一宣告來源**：`tools/translate.py`（優先級、跳過、前綴摘除）、`tools/fix_text.py`
 （正則、符號表、換行政策）、`tools/check_codes.py`、`agt package`（補丁步驟）都從這裡讀。
-任何以 `_` 開頭的鍵（`_doc`、`symbol_map_doc` 之類的 `*_doc` 除外是普通鍵）都是註解，`core/profile.py` 載入時忽略。
+任何以 `_` 開頭的鍵（`_doc`、`_symbol_map_doc`…）都是註解，`core/profile.py` 載入時忽略。
 載入：`core.profile.load_profile("wolf_rpg")`（也接受別名與檔案路徑）。
 
 | 欄位 | 型別 | 說明 |
@@ -12,6 +12,7 @@ profile 是每個引擎的**單一宣告來源**：`tools/translate.py`（優先
 | `display_name` | str | 顯示用 |
 | `aliases` | list[str] | `load_profile()` 與 `--engine` 可用的別名（`wolf`、`rpgmaker`…） |
 | `variants` | dict | 同引擎不同版本／分支。每個 variant 至少有 `source_encoding`、`target_encoding`；可加 `language_marker`、`exe`、`data_dir` 等引擎自訂鍵。`adapter.detect()` 決定 variant，寫進 `agt.json` 與 sidecar |
+| `python_env` | dict | **選用**。vendor 腳本需要第三方套件時宣告：`venv`（相對 repo 根目錄，如 `.venv-unity`）、`requirements`（相對 `engines/<name>/`，預設 `requirements.txt`）、`python`（版本，uv 建 venv 用）。`bash tools/setup_env.sh <name>` 建立；`EngineAdapter` 看到就用該直譯器跑 vendor 腳本。沒宣告＝純標準庫，用 `config.yaml` 的 `python_stdlib` |
 | `detection` | dict | 給 adapter 與文件參考的辨識線索：`files_any`（任一存在）、`globs_any`、`magic`（`{glob, offset, hex}`）、`negative_files`（存在就不是）、`evidence_files`（檔案→variant 提示）。adapter 可以只用其中一部分 |
 | `contexts` | dict[str, obj] | 每個 context 一筆：`priority`（越小越先翻，預設 50）、`default`（`translate` 預設翻／`optional` 要 `--include-optional`／`skip` 不翻）、`risky`（翻錯會改變行為）、`requires_counterpart`（只有同原文也出現在其他 context 才翻，Wolf `condition`）、`description`、`reason`（為何 skip） |
 | `control_codes.case_insensitive` | bool | RPG Maker 的 `\N[1]`／`\n[1]` 相同 → true |

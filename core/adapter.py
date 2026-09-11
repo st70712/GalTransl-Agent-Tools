@@ -125,9 +125,16 @@ class EngineAdapter(ABC):
     def __init__(self, python: str | None = None) -> None:
         if not self.name:
             raise ValueError(f"{type(self).__name__} 沒有設定 name")
-        self.python = python or config.python_stdlib()
         self.profile: EngineProfile = load_profile(self.name)
         self.vendor_dir: Path = self.profile.engine_dir / "vendor"
+        venv = self.profile.venv_python()
+        if venv is not None:
+            if not venv.exists():
+                raise SystemExit(f"引擎 {self.name} 需要專用環境 {venv.parent.parent.name}，尚未建立：\n"
+                                 f"  bash tools/setup_env.sh {self.name}")
+            self.python = str(venv)          # profile 宣告了 python_env → 一律用它跑 vendor 腳本
+        else:
+            self.python = python or config.python_stdlib()
 
     # -- 偵測 ---------------------------------------------------------------
 

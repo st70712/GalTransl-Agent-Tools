@@ -14,7 +14,7 @@
 |---|---|
 | `agt.py`、`core/`、`engines/**`、`tools/check_codes.py`、`tests/` | `python_stdlib` = `/raid/home/jimhsieh/miniconda3/envs/galtransl/bin/python`（3.11，純標準庫） |
 | `tools/translate.py`（非 `--dry-run`）、`tools/fix_text.py`（用 opencc） | `python_nllb` = `/raid/home/jimhsieh/miniconda3/envs/nllb-env/bin/python`（openai/httpx/opencc） |
-| `engines/unity_textasset/vendor/*`（UnityPy） | `python_unity` = `.venv-unity/bin/python`（uv venv；重建：`uv venv --python <nllb-env python> .venv-unity && uv pip install --python .venv-unity/bin/python UnityPy`）。Unity 轉接器會自動用它 |
+| 有宣告 `python_env` 的引擎（目前：`unity_textasset` → `.venv-unity`，UnityPy） | 該引擎 `profile.json` 的 `python_env.venv`；`bash tools/setup_env.sh <engine>` 建立，轉接器自動使用 |
 
 ```bash
 PY=/raid/home/jimhsieh/miniconda3/envs/galtransl/bin/python
@@ -22,7 +22,14 @@ PYT=/raid/home/jimhsieh/miniconda3/envs/nllb-env/bin/python
 ```
 
 - GalTransl 框架位置：環境變數 `GALTRANSL_ROOT` 或 `config.yaml` 的 `galtransl_root`（`/raid/home/jimhsieh/GalTransl`）。
-- **不新建 conda 環境、不 pip install 到 conda env**。工具只能用標準庫；第三方套件只准出現在 `translate.py`／`fix_text.py` 的函式內延遲載入，或放在 uv 建的專用 venv（目前只有 `.venv-unity`）。
+- **環境政策**：核心（`core/`、`agt.py`、`tools/check_codes.py`、`tests/`）只用標準庫。引擎的 vendor 腳本若需要第三方套件
+  （UnityPy、fonttools…），**允許建立該引擎專用的虛擬環境**，但必須把依賴宣告清楚：`profile.json` 的
+  `"python_env": {"venv": ".venv-<x>", "requirements": "requirements.txt", "python": "3.12"}` + `engines/<x>/requirements.txt`，
+  用 `bash tools/setup_env.sh <x>` 建（uv，venv 放 repo 根目錄、已 gitignore）。**不動 conda 環境、不 pip install 進 conda env**；
+  `translate.py`／`fix_text.py` 的第三方 import 放函式內延遲載入。
+- **可攜性**：`config.yaml` 裡是這台機器的絕對路徑（conda、GalTransl、模型、llama-server）。搬到別的機器：改 `config.yaml`
+  （或用 `AGT_*`／`GALTRANSL_ROOT` 環境變數覆蓋）→ 對每個要用的引擎跑 `setup_env.sh` → `agt engines` 確認能載入。
+  引擎目錄自己要能說清楚「我需要什麼」，不要依賴機器上剛好有的套件。
 - **`engines/*/vendor/**` 不得修改**（原樣搬入的既有工具，md5 記在各引擎的 `VENDOR.md`）。要改行為改 `adapter.py` 或 `profile.json`。
 - `ruff check .` 已排除 vendor；新程式碼要過 ruff。測試：`$PY -m unittest discover -s tests`。
 
@@ -46,13 +53,20 @@ projects/<game>/    每款遊戲的工作目錄（不進 git）：original/ extr
 每一關都印出底層 vendored 指令，可直接複製重跑；狀態記在 `agt.json`（`$PY agt.py status GAME`）。
 
 - [ ] **G0 辨識引擎** `$PY agt.py detect DIR` → `init GAME --original DIR`。第一個假設常常是錯的（上次「RPG Maker」其實是 Wolf）。
-- [ ] **G1 prepare 後先量測** `prepare GAME`；統計封包儲存形式分布、檔案數、字串數、各 context 分布。用數字，不用猜。
-- [ ] **G2 往返驗證** `roundtrip GAME`：解析→寫回逐位元組（或 JSON）相同。**動任何文字前的硬關卡**。
+- [ ] **G1 prepare 後先量測** `prepare GAME`；統計封包儲存形式分布、檔案數、字串數、各 context 分布，**以及字型覆蓋率**：
+      找出遊戲實際用的字型（內建 TTF/OTF、TMP 圖集、Big5 碼表…），把它的字元集對一份繁中語料
+      （例如 `GalTransl-sister/exported_full/script.json` 的 19 萬字譯文）算缺字率；缺字要在翻譯前就有對策（換字型／動態造字／替字表）。用數字，不用猜。
+- [ ] **G2 往返驗證** `roundtrip GAME`：解析→寫回逐位元組（二進位）或 JSON 相等。**動任何文字前的硬關卡**。
+      若工具鏈重新序列化本來就不會逐位元組相同（UnityPy 存 SerializedFile 會少掉對齊／標頭），關卡改為
+      「物件集合相同 + 每個物件內容相同 + 文字資產重新 dump 與原文相同」，並在 `NOTES.md` 註明「遊戲吃不吃要靠 G6 實機確認」。
 - [ ] **G3 導出並抽樣** `export GAME`：看各 context 樣本，核對第 7 節「絕不導出」清單；名字牌之類的顯示文字有沒有漏。
 - [ ] **G4 零翻譯導入** 由 `gates` 自動跑：清空譯文導入後輸出必須與 extracted 相同；`verify GAME` 0 錯誤。
 - [ ] **G5 破壞攔截** `breakage GAME`：刻意弄壞一份複本，verify 必須攔下來。
-- [ ] **G6 Smoke build → 停下來等實機** `$PYT tools/translate.py -i … --limit 20` → `fix_text` → `check_codes` → `import GAME` → `package GAME`。
+- [ ] **G6 Smoke build → 停下來等實機** `$PYT tools/translate.py -i … --limit 20 [--filter 開場]` → `fix_text` → `check_codes` → `import GAME` → `package GAME`。
+      樣本要落在**一開遊戲就看得到**的地方（用 `--filter` 鎖定開場），並包含原字型字元集**以外**的字（戶／溫／另／你／她…）來測缺字。
       **交付 `out/` 給使用者實機開啟，等回報後 `mark GAME user_boot_ok`。這 20 分鐘能省下數小時。**
+      若要改引擎資產（字型、圖集、旗標）：**一次只改一件事**，出「單變數變體」讓使用者二分；崩潰就索取 crash.dmp／Player.log
+      （`.venv-unity` 有 `minidump` 可解析例外位址與模組），不要靠猜。
 - [ ] **G7 大量翻譯**（翻譯記憶預設開；`--dict`；用 `run_in_background` 跑；沒有 `user_boot_ok` 時 translate.py 會拒絕，`--force` 才越過）。
 - [ ] **G8 收尾** `fix_text` → `validate GAME` 全過 → `check-codes GAME` 0 條 fatal → `import GAME` → `verify GAME` → `package GAME`（**永遠從 `original/` 的原始封包出發**）。
 - [ ] **G9 交付** `out/` + `安裝說明.txt`（翻譯率、刻意保留日文清單、已知瑕疵、驗收清單）；等使用者 A/B 回報，`mark GAME user_final_ok`。
@@ -104,6 +118,8 @@ projects/<game>/    每款遊戲的工作目錄（不進 git）：original/ extr
 - 長度敏感檔（`Game.dat` 類）要改長度 → 停。只做不改長度的原地覆蓋。
 - 找不到語言標記／未知欄位 → 先請使用者提供同引擎的官方多語版本來 diff，比逆向快得多。
 - 需要刪除、覆蓋使用者提供的檔案 → 一律先改名 `.orig`，不刪。
+- 中文顯示成 □ → 是字型缺字，不是譯文壞掉。先量測（圖集字元表／cmap 覆蓋率），再決定換字型、動態造字或替字表；每個嘗試都是一個變體，實機驗證。
+- 檔案交付：`SendUserFile` 上限 30 MiB，超過就 zip 或放到 `~/gdrive/GalTransl-Agent-Tools/<game>/`（rclone 掛載的 Google Drive）。
 
 ## 9. 背景工作禮儀
 
@@ -117,7 +133,8 @@ projects/<game>/    每款遊戲的工作目錄（不進 git）：original/ extr
 - `original/` 唯讀；`translated/` 是衍生物可隨時重建；打包永遠從 `original/` 的原始封包出發，不拿上一次產物再打包。
 - 改導出規則前先備份 `exported/script.json`；重新導出後用 `export GAME --merge PREV.json` 接續譯文（以 `(source_file, location)` 對應）。
 - 檢查點 `.agt_checkpoint.json` 以 `(source_file, location)` 為鍵；看到舊式 `.script_checkpoint.json`（位置序號）一律刪掉再跑，它曾靜默錯位 545 條。
-- 不把 GB 級遊戲資料放進 repo；`projects/` 整個不進 git。
+- 不把 GB 級遊戲資料放進 repo；`projects/` 整個不進 git；`.venv*` 也不進 git（用 `setup_env.sh` 重建）。
+- A/B 變體放 `projects/<game>/variants/<字母>/`，每個變體只差一件事，並在 `HANDOFF.md` 記下差異與回報結果。
 - 不 `git push`、不設 remote，除非使用者明說。
 
 ## 11. 收尾回寫

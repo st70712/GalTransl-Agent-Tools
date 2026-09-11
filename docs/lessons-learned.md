@@ -32,6 +32,21 @@
 | 改導出規則要 `--merge` | 位址 `(source_file, location)` 穩定，`index` 不穩定 |
 | 官方漢化版是對照組 | 未知欄位先 diff 官方版本 |
 
+## Unity／字型（RJ01483219，2026-09-11）
+
+- **字型覆蓋率要在翻譯前量**。Wolf 是缺字（換 Yahei），Unity 是 TextMeshPro 靜態圖集只有 7131 字、繁中缺 256 種（你／她／嗎…）。
+  兩次都是 smoke build 才看到 □。G1 現在把「字型覆蓋率」列為量測項目。
+- **改旗標騙不過引擎**：把串流在 .resS 的圖集 `m_IsReadable` 改 1，TMP 的檢查過了，FontEngine 拿到 null 資料指標就崩
+  （crash.dmp：UnityPlayer.dll 讀 0x0）。真正可讀的貼圖是內嵌在 .assets 裡的。
+- **單變數變體二分 + crash.dmp**：三個各改一項的變體都不崩、只有全改的崩，一次就定位到「畫字那一步」；
+  Player.log 不一定存在，`%LOCALAPPDATA%\Temp\<公司>\<遊戲>\Crashes\` 的 crash.dmp 用 `minidump` 套件可讀例外位址與模組。
+- **沒有 typetree 的 MonoBehaviour 可以用錨點解析**：先找結構規律明確的表（字元表 `{1, unicode, glyph, 1.0}`），再前後推；
+  欄位宣告順序可從 `global-metadata.dat` 的字串表附近讀出。每一步都要有合理性檢查，不合就中止。
+- **第三方函式庫重存不逐位元組相同**（UnityPy 少 23 KB）→ 往返關卡改為逐物件；遊戲吃不吃靠實機（本例接受）。
+- **交付檔案有 30 MiB 上限**；43 MB 的 assets 要 zip 或放 rclone 掛載的 Google Drive。
+- **環境依賴要在第一版就宣告**：UnityPy 一開始是臨時裝的，後來才補 `python_env` + `requirements.txt` + `setup_env.sh`。
+  新引擎需要套件時，從一開始就走宣告路線，專案才搬得到別的機器。
+
 ## 工具鏈事故
 
 - **檢查點以位置序號為鍵**（GalTransl-Angle，2026-07-15）：導出範圍從 1520 變 1816 條後沒刪 `.script_checkpoint.json`，545 條譯文靜默錯位（`防御バフ_自分` 變「攻擊增益_塞拉」）。

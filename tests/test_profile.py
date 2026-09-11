@@ -60,6 +60,13 @@ class ProfileLoading(unittest.TestCase):
         self.assertTrue(rm.codes.case_insensitive)
         self.assertIn("debug_name", rm.default_skip_contexts())
 
+    def test_python_env_declaration(self):
+        unity = load_profile("unity_textasset")
+        self.assertEqual(unity.python_env.get("venv"), ".venv-unity")
+        self.assertTrue((unity.engine_dir / unity.python_env.get("requirements", "requirements.txt")).exists())
+        self.assertTrue(str(unity.venv_python()).endswith(".venv-unity/bin/python"))
+        self.assertIsNone(load_profile("wolf_rpg").venv_python())
+
 
 class WolfRegexDrift(unittest.TestCase):
     """profile 的正則是從 vendored 腳本抄來的；任何一邊改了都要一起改。"""

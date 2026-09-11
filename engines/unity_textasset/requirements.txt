@@ -1,0 +1,4 @@
+# engines/unity_textasset 的 vendor 腳本需要的套件（用 tools/setup_env.sh unity_textasset 建 .venv-unity）
+UnityPy==1.25.3
+fonttools>=4.50      # 字型 cmap 覆蓋率量測（tmp 字型相關腳本）
+minidump>=0.0.24     # 選用：解析 Windows crash.dmp

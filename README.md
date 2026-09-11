@@ -6,6 +6,10 @@ Agent 驅動的遊戲中文化補丁工具箱。在 Claude Code 裡照 `CLAUDE.m
 已支援：**RPG Maker MV/MZ**、**WOLF RPG Editor 2.x/3.x**（兩套工具原樣搬入自 GalTransl-RPGmaker 與 GalTransl-sister，通過實機驗證）。
 其他引擎（Bishop、TyranoScript、KiriKiri、Unity、Ren'Py…）有線索與接入指引，見 `docs/engines.md`。
 
+## 引擎專用環境
+
+核心只用標準庫。需要第三方套件的引擎在 `profile.json` 宣告 `python_env`，用 `bash tools/setup_env.sh <engine>` 建 venv（uv）；換機器改 `config.yaml` 後重跑即可。
+
 ## 快速開始
 
 ```bash

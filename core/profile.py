@@ -83,6 +83,7 @@ class EngineProfile:
     acceptance_checklist: list[str]
     docs: list[str]
     path: Path
+    python_env: dict[str, Any] = field(default_factory=dict)
     raw: dict[str, Any] = field(repr=False, default_factory=dict)
 
     # -- context 政策 -------------------------------------------------------
@@ -117,6 +118,14 @@ class EngineProfile:
     @property
     def engine_dir(self) -> Path:
         return self.path.parent
+
+    def venv_python(self) -> Path | None:
+        """profile 宣告的專用 venv 直譯器（相對 repo 根目錄）；沒宣告回傳 None。"""
+        venv = (self.python_env or {}).get("venv")
+        if not venv:
+            return None
+        from . import REPO_ROOT
+        return REPO_ROOT / venv / "bin" / "python"
 
 
 def _strip_doc(obj: Any) -> Any:
@@ -166,6 +175,7 @@ def _parse(raw: dict[str, Any], path: Path) -> EngineProfile:
         acceptance_checklist=list(raw.get("acceptance_checklist") or []),
         docs=list(raw.get("docs") or []),
         path=path,
+        python_env=dict(raw.get("python_env") or {}),
         raw=raw,
     )
 

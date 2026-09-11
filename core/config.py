@@ -76,6 +76,6 @@ def python_nllb() -> str:
 
 
 def python_unity() -> str:
-    """Unity 轉接器用的 uv venv（含 UnityPy）；不存在時回傳 None 讓呼叫端給出建置提示。"""
+    """（相容用）Unity 轉接器的 venv；正式來源是 engines/unity_textasset/profile.json 的 python_env。"""
     p = load_config()["python_unity"]
     return p if Path(p).exists() else ""

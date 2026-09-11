@@ -6,7 +6,10 @@
   "aliases": [],
   "variants": {
     "_doc": "至少一個變體；source_encoding 是遊戲資料的原始編碼，target_encoding 是補丁要寫回的編碼。",
-    "default": {"source_encoding": "utf-8", "target_encoding": "utf-8"}
+    "default": {
+      "source_encoding": "utf-8",
+      "target_encoding": "utf-8"
+    }
   },
   "detection": {
     "_doc": "給人看的辨識特徵（adapter.detect 才是真正的判斷邏輯）。",
@@ -15,10 +18,24 @@
     "magic": [],
     "negative_files": []
   },
+  "python_env": {
+    "_doc": "只有 vendor 腳本需要第三方套件時才宣告；宣告後用 tools/setup_env.sh <engine> 建 venv，套件列在 engines/<engine>/requirements.txt。核心工具與大多數引擎維持純標準庫。",
+    "venv": "",
+    "requirements": "requirements.txt",
+    "python": "3.12"
+  },
   "contexts": {
     "_doc": "priority 小的先翻；default: translate | optional（要 --include-optional）| skip；risky=翻錯會改變行為；requires_counterpart=只翻「原文也出現在其他 context」的。",
-    "dialog": {"priority": 1, "default": "translate", "description": "對話"},
-    "choice": {"priority": 2, "default": "translate", "description": "選項"}
+    "dialog": {
+      "priority": 1,
+      "default": "translate",
+      "description": "對話"
+    },
+    "choice": {
+      "priority": 2,
+      "default": "translate",
+      "description": "選項"
+    }
   },
   "control_codes": {
     "_doc": "value_codes=帶值的碼（遺失＝內容不見，退回原文）；style_codes=純表現（遺失只警告）；leading_codes=送模型前要摘除、翻完接回的開頭碼；多字母碼要排在單字母前。",
@@ -36,13 +53,20 @@
     "TODO: 素材路徑、跳躍標籤、事件名、非字串欄位……"
   ],
   "patch": {
-    "steps": ["copy_changed_files", "write_install_notes"],
-    "deliverables": {"default": []}
+    "steps": [
+      "copy_changed_files",
+      "write_install_notes"
+    ],
+    "deliverables": {
+      "default": []
+    }
   },
   "acceptance_checklist": [
     "遊戲開得起來",
     "對話／選項顯示中文，不是方框",
     "字型有沒有缺字"
   ],
-  "docs": ["engines/_template/NOTES.md"]
+  "docs": [
+    "engines/_template/NOTES.md"
+  ]
 }

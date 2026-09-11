@@ -216,6 +216,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-readable", action="store_true", help="不改圖集 Texture2D 的可讀旗標（二分崩潰原因用）")
     ap.add_argument("--no-source", action="store_true", help="不設 m_SourceFontFile（保持 null；二分用）")
     ap.add_argument("--only-readable", action="store_true", help="只改圖集可讀，不動字型資產（二分用）")
+    ap.add_argument("--inline-atlas", action="store_true",
+                    help="把圖集像素從 .resS 搬進 .assets 內嵌（m_StreamData 清空）。串流圖集即使設可讀也沒有 CPU 副本，TMP 畫字會 null 崩潰；"
+                         "內嵌後才是真正可讀（Unity 自己建置可讀貼圖時也是內嵌）")
     ap.add_argument("--keep-free-rects", action="store_true",
                     help="保留舊圖集的 m_FreeGlyphRects（預設清空：舊圖集在建置時不可讀、沒有 CPU 像素副本，讓 TMP 往裡面畫字會 null 存取崩潰；"
                          "清空後 TMP 會改開一張執行期新建的圖集）")
@@ -279,7 +282,21 @@ def main(argv: list[str] | None = None) -> int:
             break
         if o.type.name == "Texture2D" and o.path_id in atlas_ids:
             tt = o.read_typetree()
-            print(f"   Texture2D #{o.path_id} {tt.get('m_Name')!r} {tt.get('m_Width')}x{tt.get('m_Height')} readable {tt.get('m_IsReadable')} → True")
+            sd = tt.get("m_StreamData") or {}
+            note = ""
+            if args.inline_atlas and sd.get("size"):
+                res_path = data_dir / sd["path"]
+                with res_path.open("rb") as f:
+                    f.seek(sd["offset"])
+                    pixels = f.read(sd["size"])
+                if len(pixels) != sd["size"]:
+                    raise SystemExit(f"讀 {res_path} 失敗：{len(pixels)} != {sd['size']}")
+                key = "image data" if "image data" in tt else next(k for k in tt if k.lower().replace("_", "").replace(" ", "") == "imagedata")
+                tt[key] = pixels
+                tt["m_StreamData"] = {"offset": 0, "size": 0, "path": ""}
+                tt["m_CompleteImageSize"] = len(pixels)
+                note = f"，像素 {len(pixels):,} bytes 從 {sd['path']} 搬進內嵌"
+            print(f"   Texture2D #{o.path_id} {tt.get('m_Name')!r} {tt.get('m_Width')}x{tt.get('m_Height')} readable {tt.get('m_IsReadable')} → True{note}")
             if not args.dry_run:
                 tt["m_IsReadable"] = True
                 o.save_typetree(tt)

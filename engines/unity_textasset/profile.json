@@ -37,6 +37,12 @@
       "www/data/System.json"
     ]
   },
+  "python_env": {
+    "_doc": "本引擎的 vendor 腳本需要第三方套件；用 tools/setup_env.sh unity_textasset 建立。venv 路徑相對於 repo 根目錄。",
+    "venv": ".venv-unity",
+    "requirements": "requirements.txt",
+    "python": "3.12"
+  },
   "contexts": {
     "dialog": {
       "priority": 1,

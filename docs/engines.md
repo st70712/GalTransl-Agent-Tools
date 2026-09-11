@@ -44,3 +44,8 @@
 ## 新增引擎
 
 把新引擎加進上表，並照 `docs/new-adapter.md` 建 `engines/<name>/`。
+
+
+## 引擎專用環境
+
+有宣告 `python_env` 的引擎（目前 `unity_textasset`）要先 `bash tools/setup_env.sh <engine>`；`bash tools/setup_env.sh <engine> --check` 可確認套件齊全。
