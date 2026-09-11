@@ -23,7 +23,7 @@
 | Bishop（BSXScript） | `*.exe` + `*.bsa` | `BSArc` 簽章（v1–3） | `bsxx.dat`（BSXScript 3.1，UTF-16LE） | UTF-16LE | 指標 → `engines/bishop_bsx/README.md` |
 | TyranoScript | `tyrano/`、`data/scenario/*.ks`、`index.html` | 無（或 Electron asar） | `data/scenario/*.ks` | UTF-8 | 指標；翻譯驅動 `/raid/home/jimhsieh/GalTransl/text/translate_tyranoscript.py` |
 | KiriKiri / KAG | `*.exe`（krkr）、`*.xp3` | `XP3\r\n\x1a` | `*.ks`（多半在 xp3 內，可能加密） | Shift-JIS / UTF-16 | 指標 |
-| Unity | `<Game>_Data/`、`UnityPlayer.dll` | `globalgamemanagers`、`resources.assets`、`*.bundle` | TextAsset／MonoBehaviour／IL2CPP 字串 | UTF-8 | 指標 |
+| Unity（JSON 表格 TextAsset） | `UnityPlayer.dll`、`*_Data/globalgamemanagers`、`resources.assets` 內有 `{"Rows":[…]}` TextAsset | **支援** `engines/unity_textasset`（需 `.venv-unity` 的 UnityPy；UI 標籤／bundle 為第二階段） |
 | Ren'Py | `game/`、`renpy/`、`lib/` | `game/*.rpa` | `*.rpy` / `*.rpyc` | UTF-8 | 指標（官方有翻譯機制 `game/tl/`） |
 | NScripter | `nscript.dat`、`arc.nsa` | `arc.nsa` / `arc.sar` | `nscript.dat`（XOR 0x84） | Shift-JIS | 指標 |
 

@@ -8,6 +8,8 @@ galtransl_root: /raid/home/jimhsieh/GalTransl
 python_stdlib: /raid/home/jimhsieh/miniconda3/envs/galtransl/bin/python
 # 翻譯與 opencc 步驟用的 Python（tools/translate.py、tools/fix_text.py）
 python_nllb: /raid/home/jimhsieh/miniconda3/envs/nllb-env/bin/python
+# Unity 引擎轉接器用的 Python（uv venv，含 UnityPy；建法見 engines/unity_textasset/NOTES.md）
+python_unity: /raid/home/jimhsieh/GalTransl-Agent-Tools/.venv-unity/bin/python
 
 # 本機翻譯模型伺服器
 llama_server_bin: /raid/home/jimhsieh/GalTransl/llama.cpp/build/bin/llama-server

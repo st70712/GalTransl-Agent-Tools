@@ -14,6 +14,7 @@
 |---|---|
 | `agt.py`、`core/`、`engines/**`、`tools/check_codes.py`、`tests/` | `python_stdlib` = `/raid/home/jimhsieh/miniconda3/envs/galtransl/bin/python`（3.11，純標準庫） |
 | `tools/translate.py`（非 `--dry-run`）、`tools/fix_text.py`（用 opencc） | `python_nllb` = `/raid/home/jimhsieh/miniconda3/envs/nllb-env/bin/python`（openai/httpx/opencc） |
+| `engines/unity_textasset/vendor/*`（UnityPy） | `python_unity` = `.venv-unity/bin/python`（uv venv；重建：`uv venv --python <nllb-env python> .venv-unity && uv pip install --python .venv-unity/bin/python UnityPy`）。Unity 轉接器會自動用它 |
 
 ```bash
 PY=/raid/home/jimhsieh/miniconda3/envs/galtransl/bin/python
@@ -21,7 +22,7 @@ PYT=/raid/home/jimhsieh/miniconda3/envs/nllb-env/bin/python
 ```
 
 - GalTransl 框架位置：環境變數 `GALTRANSL_ROOT` 或 `config.yaml` 的 `galtransl_root`（`/raid/home/jimhsieh/GalTransl`）。
-- **不新建 conda 環境、不 pip install**。工具只能用標準庫；第三方套件只准出現在 `translate.py`／`fix_text.py` 的函式內延遲載入。
+- **不新建 conda 環境、不 pip install 到 conda env**。工具只能用標準庫；第三方套件只准出現在 `translate.py`／`fix_text.py` 的函式內延遲載入，或放在 uv 建的專用 venv（目前只有 `.venv-unity`）。
 - **`engines/*/vendor/**` 不得修改**（原樣搬入的既有工具，md5 記在各引擎的 `VENDOR.md`）。要改行為改 `adapter.py` 或 `profile.json`。
 - `ruff check .` 已排除 vendor；新程式碼要過 ruff。測試：`$PY -m unittest discover -s tests`。
 
@@ -73,7 +74,7 @@ projects/<game>/    每款遊戲的工作目錄（不進 git）：original/ extr
 | Bishop / BSXScript | `*.bsa` 封包、`bsxx.dat`（UTF-16LE） | 指標 → `engines/bishop_bsx/README.md`、https://github.com/st70712/GalTransl-BISO |
 | TyranoScript | `data/scenario/*.ks`、`tyrano/` | 指標（翻譯驅動在 `/raid/home/jimhsieh/GalTransl/text/translate_tyranoscript.py`，本專案無導出／導入工具） |
 | KiriKiri | `*.xp3`、`*.ks` | 指標 |
-| Unity | `*_Data/`、`globalgamemanagers`、`resources.assets` | 指標 |
+| Unity（JSON 表格 TextAsset） | `UnityPlayer.dll`、`*_Data/globalgamemanagers`、`resources.assets` 內有 `{"Rows":[…]}` TextAsset | **支援** `engines/unity_textasset`（需 `.venv-unity` 的 UnityPy；UI 標籤／bundle 為第二階段） |
 | Ren'Py | `game/*.rpa`、`*.rpyc` | 指標 |
 
 ## 6. 決策樹

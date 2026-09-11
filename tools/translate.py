@@ -24,6 +24,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -93,7 +94,8 @@ class ScriptTranslator:
                  endpoint: str, model_type: str, batch_size: int, dict_files: list[str],
                  skip_translated: bool, skip_contexts: set[str] | None, include_optional: bool,
                  priority_threshold: int, target_encoding: str, limit: int, dry_run: bool,
-                 log: Log, galtransl_root: str, ignore_legacy_checkpoint: bool = False):
+                 log: Log, galtransl_root: str, ignore_legacy_checkpoint: bool = False,
+                 entry_filter: str | None = None):
         self.profile = profile
         self.input_file = input_file
         self.output_file = output_file or input_file
@@ -110,6 +112,7 @@ class ScriptTranslator:
         self.log = log
         self.galtransl_root = galtransl_root
         self.ignore_legacy_checkpoint = ignore_legacy_checkpoint
+        self.entry_filter = re.compile(entry_filter) if entry_filter else None
 
         self.skip_contexts = set(skip_contexts) if skip_contexts is not None else profile.default_skip_contexts()
         if not include_optional:
@@ -313,6 +316,9 @@ common:
             log(f"   翻譯記憶: {len(memory)} 組原文")
 
         pending = [e for e in strings if self.should_translate(e)]
+        if self.entry_filter:
+            pending = [e for e in pending if self.entry_filter.search(f"{e['source_file']}#{e['location']}")]
+            log(f"   --filter {self.entry_filter.pattern!r}：篩到 {len(pending)} 條")
         reused = 0
         to_translate: list[dict] = []
         seen: set[str] = set()
@@ -504,6 +510,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-skip-translated", action="store_true", help="已有譯文的也重翻")
     ap.add_argument("--target-encoding", help="結尾編碼檢查用（預設 sidecar / info.encoding / utf-8）")
     ap.add_argument("--limit", type=int, default=0, help="只送前 N 條（smoke build 用）")
+    ap.add_argument("--filter", help="只處理 source_file#location 符合此正則的條目（例如 Data_Event，讓 smoke build 落在開場）")
     ap.add_argument("--dry-run", action="store_true", help="只印統計與拆分，不連線、不寫檔")
     ap.add_argument("--log", type=Path, help="同步寫入的 log 檔（專案佈局下預設 projects/<game>/logs/translate-<ts>.log）")
     ap.add_argument("--force", action="store_true", help="尚未 user_boot_ok 也允許大量翻譯")
@@ -546,7 +553,7 @@ def main(argv: list[str] | None = None) -> int:
         include_optional=args.include_optional, priority_threshold=args.priority,
         target_encoding=target_encoding, limit=args.limit, dry_run=args.dry_run, log=log,
         galtransl_root=os.environ.get("GALTRANSL_ROOT") or cfg["galtransl_root"],
-        ignore_legacy_checkpoint=args.ignore_legacy_checkpoint,
+        ignore_legacy_checkpoint=args.ignore_legacy_checkpoint, entry_filter=args.filter,
     )
     try:
         rc = asyncio.run(tr.run())

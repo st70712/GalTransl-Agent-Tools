@@ -1,0 +1,161 @@
+{
+  "_doc": "秘密のシェアハウスせいかつ（RJ01483219，OneUp）resources.assets 各表的欄位規則。同作者的下一款很可能沿用同一套表格系統。",
+  "tables": {
+    "Data_Event": [
+      {
+        "field": "Arg2",
+        "context": "dialog",
+        "when_command": [
+          "DrawMessageWindow"
+        ],
+        "speaker_from": "Arg1:Name"
+      },
+      {
+        "field": "Arg1",
+        "context": "speaker",
+        "when_command": [
+          "DrawMessageWindow"
+        ],
+        "parse": "kv",
+        "key": "Name"
+      },
+      {
+        "field": "Arg1",
+        "context": "choice",
+        "when_command": [
+          "Choice"
+        ],
+        "parse": "kv",
+        "key_prefix": "Choice"
+      },
+      {
+        "field": "Arg1",
+        "context": "system",
+        "when_command": [
+          "Dialog"
+        ],
+        "parse": "kv",
+        "key": "Message"
+      },
+      {
+        "field": "Arg1",
+        "context": "label_memo",
+        "when_command_prefix": "*"
+      },
+      {
+        "field": "Arg2",
+        "context": "memo",
+        "when_command": [
+          "if",
+          "else if",
+          "else"
+        ]
+      },
+      {
+        "field": "Arg2",
+        "context": "memo",
+        "when_command_prefix": "*"
+      }
+    ],
+    "Data_Osawari": [],
+    "Data_SystemMessage": [
+      {
+        "field": "Message",
+        "context": "system"
+      }
+    ],
+    "Data_Dokyo": [
+      {
+        "field": "NextText",
+        "context": "system"
+      }
+    ],
+    "Data_MySkill": [
+      {
+        "field": "Title",
+        "context": "database"
+      },
+      {
+        "field": "Explain",
+        "context": "database"
+      }
+    ],
+    "Data_Item": [
+      {
+        "field": "Name",
+        "context": "database"
+      },
+      {
+        "field": "Message",
+        "context": "database"
+      }
+    ],
+    "Data_Collection": [
+      {
+        "field": "Name",
+        "context": "database"
+      },
+      {
+        "field": "Message",
+        "context": "database"
+      }
+    ],
+    "Data_TotalEvent": [
+      {
+        "field": "TitleName",
+        "context": "choice"
+      },
+      {
+        "field": "Comment",
+        "context": "memo"
+      }
+    ],
+    "Data_SkinshipMessage": [
+      {
+        "field": "Message",
+        "context": "dialog",
+        "speaker_from": "SpeachCharaName"
+      },
+      {
+        "field": "SpeachCharaName",
+        "context": "speaker"
+      }
+    ],
+    "Data_ChatGroup": [
+      {
+        "field": "Message",
+        "context": "dialog"
+      },
+      {
+        "field": "Memo",
+        "context": "memo"
+      }
+    ],
+    "Data_Lottery": [
+      {
+        "field": "Message",
+        "context": "system"
+      }
+    ],
+    "Data_TimeSchedule": [
+      {
+        "field": "Name",
+        "context": "memo"
+      }
+    ],
+    "Data_Tutorial": [
+      {
+        "field": "Name",
+        "context": "memo"
+      }
+    ]
+  },
+  "default": {
+    "context": "text",
+    "skip_fields": [
+      "Memo",
+      "Comment",
+      "ID"
+    ]
+  }
+}

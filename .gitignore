@@ -2,6 +2,10 @@
 projects/*
 !projects/README.md
 
+# uv 建的專用虛擬環境（UnityPy）
+.venv-unity/
+.venv*/
+
 # 執行紀錄與暫存
 logs/
 tests/_scratch/

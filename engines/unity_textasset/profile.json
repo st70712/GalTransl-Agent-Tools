@@ -1,0 +1,135 @@
+{
+  "_doc": "Unity 遊戲、文本在 resources.assets 的 JSON 表格 TextAsset。context 由每款遊戲的 unity_rules.json 決定；這裡只定義各 context 的優先級與政策。",
+  "schema_version": 1,
+  "name": "unity_textasset",
+  "display_name": "Unity (JSON TextAsset)",
+  "aliases": [
+    "unity",
+    "unity_json",
+    "unity_il2cpp"
+  ],
+  "variants": {
+    "il2cpp": {
+      "source_encoding": "utf-8",
+      "target_encoding": "utf-8"
+    },
+    "mono": {
+      "source_encoding": "utf-8",
+      "target_encoding": "utf-8"
+    },
+    "": {
+      "source_encoding": "utf-8",
+      "target_encoding": "utf-8"
+    }
+  },
+  "detection": {
+    "files_any": [
+      "UnityPlayer.dll",
+      "GameAssembly.dll"
+    ],
+    "globs_any": [
+      "*_Data/globalgamemanagers",
+      "*/*_Data/globalgamemanagers"
+    ],
+    "magic": [],
+    "negative_files": [
+      "Data.wolf",
+      "www/data/System.json"
+    ]
+  },
+  "contexts": {
+    "dialog": {
+      "priority": 1,
+      "default": "translate",
+      "description": "對話（DrawMessageWindow 的 Arg2、SkinshipMessage、ChatGroup）"
+    },
+    "choice": {
+      "priority": 2,
+      "default": "translate",
+      "description": "選項與話題標題（Choice 指令、TotalEvent.TitleName）"
+    },
+    "system": {
+      "priority": 3,
+      "default": "translate",
+      "description": "系統訊息／提示（SystemMessage、Dialog 指令、Dokyo）"
+    },
+    "database": {
+      "priority": 4,
+      "default": "translate",
+      "description": "道具／技能／收藏品名稱與說明"
+    },
+    "ui": {
+      "priority": 5,
+      "default": "translate",
+      "description": "場景 UI 標籤（TextMeshPro，第二階段）"
+    },
+    "text": {
+      "priority": 6,
+      "default": "translate",
+      "description": "沒有規則的表：含日文的字串欄位"
+    },
+    "speaker": {
+      "priority": 10,
+      "default": "optional",
+      "risky": true,
+      "description": "說話者名字（Name=）；可能同時被拿去查角色資產，先實機驗證再翻"
+    },
+    "label_memo": {
+      "priority": 90,
+      "default": "skip",
+      "description": "*ev_ 標籤列的 Arg1：開發者給標籤的說明"
+    },
+    "memo": {
+      "priority": 99,
+      "default": "skip",
+      "description": "開發者備註（Memo、Comment、if 的說明）"
+    }
+  },
+  "control_codes": {
+    "_doc": "value=執行期替換的佔位符 <param#xxx>（遺失＝名字不見）；style=TextMeshPro 富文本標籤。沒有開頭碼。",
+    "case_insensitive": false,
+    "value_codes": "<param#[^>]+>",
+    "style_codes": "</?(?:size|color|b|i|u|s|sup|sub|nobr|align|font|sprite|link|mark|indent|line-height|cspace|mspace|voffset|width|alpha|style|gradient|rotate|space|page|pos|lowercase|uppercase|smallcaps|noparse)(?:=[^>]*)?>",
+    "leading_codes": "^(?!x)x",
+    "stray_escape": "\\\\[a-zA-Z]"
+  },
+  "placeholders": [
+    "\\{\\d+\\}"
+  ],
+  "symbol_map": {},
+  "literal_newline_policy": "keep",
+  "line_count_policy": "warn",
+  "never_export": [
+    "Command 欄位（指令名／*ev_ 標籤名）——流程控制",
+    "Command2/Command3（資產路徑，如 Assets/…/Scene2_Voice.prefab）",
+    "Name= 之外的複合子鍵（Anim=、C1=…）——動畫／條件參數",
+    "Memo／Comment／*ev_ 列的 Arg1——開發者備註",
+    "SystemMessage.Name、ScenarioName、IconPath、GraphicPath——鍵與路徑"
+  ],
+  "patch": {
+    "steps": [
+      "copy_changed_assets",
+      "write_install_notes"
+    ],
+    "deliverables": {
+      "il2cpp": [
+        "*_Data/resources.assets"
+      ],
+      "mono": [
+        "*_Data/resources.assets"
+      ]
+    },
+    "font_doc": "TextMeshPro 字型圖集（sharedassets0 的 TMP_FontAsset）若是靜態圖集，缺字會顯示方框；smoke build 必看。"
+  },
+  "acceptance_checklist": [
+    "遊戲開得起來（UnityPy 重新序列化的 resources.assets 被接受）",
+    "對話視窗顯示中文，不是方框（TMP 字型缺字）",
+    "說話者名字牌、立繪正常（若有翻 speaker）",
+    "選項、話題標題、道具／技能說明",
+    "<param#her_name> 之類的佔位符有被換成名字，不是字面顯示",
+    "多行對話沒有超出訊息框"
+  ],
+  "docs": [
+    "engines/unity_textasset/NOTES.md"
+  ]
+}

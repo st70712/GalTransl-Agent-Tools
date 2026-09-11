@@ -17,6 +17,7 @@ DEFAULTS: dict[str, str] = {
     "galtransl_root": "/raid/home/jimhsieh/GalTransl",
     "python_stdlib": "/raid/home/jimhsieh/miniconda3/envs/galtransl/bin/python",
     "python_nllb": "/raid/home/jimhsieh/miniconda3/envs/nllb-env/bin/python",
+    "python_unity": str(REPO_ROOT / ".venv-unity" / "bin" / "python"),
     "llama_server_bin": "/raid/home/jimhsieh/GalTransl/llama.cpp/build/bin/llama-server",
     "model_gguf": "/raid/home/jimhsieh/GalTransl/models/Sakura-GalTransl-14B-v3/Sakura-Galtransl-14B-v3.8.gguf",
     "endpoint": "http://127.0.0.1:8080",
@@ -72,3 +73,9 @@ def python_stdlib() -> str:
 def python_nllb() -> str:
     p = load_config()["python_nllb"]
     return p if Path(p).exists() else os.sys.executable
+
+
+def python_unity() -> str:
+    """Unity 轉接器用的 uv venv（含 UnityPy）；不存在時回傳 None 讓呼叫端給出建置提示。"""
+    p = load_config()["python_unity"]
+    return p if Path(p).exists() else ""
