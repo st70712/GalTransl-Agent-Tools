@@ -44,6 +44,7 @@
   欄位宣告順序可從 `global-metadata.dat` 的字串表附近讀出。每一步都要有合理性檢查，不合就中止。
 - **第三方函式庫重存不逐位元組相同**（UnityPy 少 23 KB）→ 往返關卡改為逐物件；遊戲吃不吃靠實機（本例接受）。
 - **交付檔案有 30 MiB 上限**；43 MB 的 assets 要 zip 或放 rclone 掛載的 Google Drive。
+- **退回原文的譯文要一併從檢查點刪掉**：fix_text 退回 5 條後重跑 translate.py，檢查點把同樣的壞譯文原封套回。fix_text 現在會清檢查點。
 - **環境依賴要在第一版就宣告**：UnityPy 一開始是臨時裝的，後來才補 `python_env` + `requirements.txt` + `setup_env.sh`。
   新引擎需要套件時，從一開始就走宣告路線，專案才搬得到別的機器。
 

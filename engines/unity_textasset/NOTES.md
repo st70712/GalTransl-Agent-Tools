@@ -63,6 +63,13 @@
 3. `Name=` 不只出現在對話：`PlaySE`／`DrawBG` 的 `Arg1` 也是 `Name=<資產名>` → 規則必須限定 `when_command`。
 4. 純標準庫的長度前綴猜測會抓錯（TextAsset 的 m_Script 前不是單純 4-byte 長度）→ 直接用 UnityPy。
 
+## 翻譯階段的坑
+- **模型會丟 `<param#her_name>`**（名字當主詞時特別容易，5/1947），fix_text 退回、重翻仍可能再丟；最後 1 條手動補譯。
+- **退回的條目必須同時從 `.agt_checkpoint.json` 移除**，否則下次 translate.py 會把壞譯文原封套回（fix_text 現在會做）。
+- 字面 `\n`：`Data_SystemMessage` 原文就用字面 `\n`，`Data_Event` 用真換行 → profile 用 `convert_if_original_lacks`（原文沒有字面 `\n` 才轉成真換行）。
+- 模型會把 みなみ 譯成「南」，但名字牌（Name=，speaker 未翻）與 `<param#her_name>` 預設值（C# 常數）仍是 みなみ → 名字一致性要先決定。
+- 偶發退化輸出（「好大啊啊啊啊…」重複到吃掉 `</size>`）：check_codes 的富文本標籤／控制碼檢查會攔到。
+
 ## 實機驗收
 - 遊戲開得起來（重新序列化的 resources.assets 被接受）——最大未知數
 - 開場對話顯示中文、不是方框（內建 NotoSansJP SDF 字型圖集缺字風險；缺字請回報是哪些字）

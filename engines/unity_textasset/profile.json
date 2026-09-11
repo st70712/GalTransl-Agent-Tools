@@ -103,7 +103,7 @@
     "\\{\\d+\\}"
   ],
   "symbol_map": {},
-  "literal_newline_policy": "keep",
+  "literal_newline_policy": "convert_if_original_lacks",
   "line_count_policy": "warn",
   "never_export": [
     "Command 欄位（指令名／*ev_ 標籤名）——流程控制",

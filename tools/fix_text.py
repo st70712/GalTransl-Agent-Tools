@@ -198,7 +198,9 @@ def main(argv: list[str] | None = None) -> int:
     if charset_path and not args.no_charset:
         charset = set(charset_path.read_text(encoding="utf-8"))
         map_path = args.charset_map or (project_root / "charset_map.json" if (project_root / "charset_map.json").exists() else None)
-        cmap: dict[str, str] = {k: v for k, v in (json.loads(map_path.read_text(encoding="utf-8")) if map_path else {}).items() if len(k) == 1}
+        raw_map = json.loads(map_path.read_text(encoding="utf-8")) if map_path else {}
+        cmap: dict[str, str] = {k: v for k, v in raw_map.items() if len(k) == 1 and not k.startswith("_")}
+        word_map: dict[str, str] = {k: v for k, v in raw_map.items() if len(k) > 1 and not k.startswith("_")}
         t2jp = None
         if not args.no_opencc:
             try:
@@ -210,6 +212,10 @@ def main(argv: list[str] | None = None) -> int:
         for e in translated:
             if not e["translated"]:
                 continue
+            for w, rep in sorted(word_map.items(), key=lambda kv: -len(kv[0])):   # 詞級先於字級
+                if w in e["translated"]:
+                    e["translated"] = e["translated"].replace(w, rep)
+                    stats["缺字替換（詞）"] += 1
             out_chars = []
             for ch in e["translated"]:
                 if ord(ch) < 0x2E80 or ch in charset:
@@ -266,6 +272,19 @@ def main(argv: list[str] | None = None) -> int:
         print("\n（dry-run，未寫檔）")
         return 0
     out = args.output or args.script
+    # 退回原文的條目也要從檢查點拿掉，否則下次 translate.py 會把壞譯文原封不動套回來
+    ckpt = args.script.parent / ".agt_checkpoint.json"
+    if reverted and out == args.script and ckpt.exists():
+        try:
+            data = json.loads(ckpt.read_text(encoding="utf-8"))
+            entries = data.get("entries", {})
+            removed = 0
+            for e, _ in reverted:
+                removed += entries.pop(f"{e['source_file']}\t{e['location']}", None) is not None
+            ckpt.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+            print(f"檢查點：移除 {removed} 條已退回的譯文（重跑 translate.py 會重新翻）")
+        except (OSError, ValueError) as exc:
+            print(f"⚠ 檢查點更新失敗：{exc}")
     if out == args.script and not args.no_backup:
         backup = args.script.with_name(f"{args.script.stem}.backup-{datetime.now():%Y%m%d-%H%M%S}.json")
         backup.write_bytes(args.script.read_bytes())
