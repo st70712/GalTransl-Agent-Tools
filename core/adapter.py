@@ -25,8 +25,15 @@ from .roundtrip import compare_trees
 
 
 def _cmdline(cmd: list[str]) -> str:
-    """印給人複製的命令列：Windows 用 cmd 風格引號，其他平台用 POSIX。"""
-    return subprocess.list2cmdline(cmd) if os.name == "nt" else shlex.join(cmd)
+    """印給人複製的命令列：Windows 用 cmd 風格引號（含反斜線的參數一律加雙引號，貼回 Git Bash 反斜線才不會被吃掉；
+    cmd／PowerShell 也接受），其他平台用 POSIX。"""
+    if os.name != "nt":
+        return shlex.join(cmd)
+    return " ".join(subprocess.list2cmdline([c]) if not _needs_quote(c) else f'"{c}"' for c in cmd)
+
+
+def _needs_quote(arg: str) -> bool:
+    return ("\\" in arg or " " in arg) and '"' not in arg
 
 
 @dataclass
@@ -208,7 +215,7 @@ class EngineAdapter(ABC):
         child_env.setdefault("PYTHONUTF8", "1")
         child_env.setdefault("PYTHONIOENCODING", "utf-8")
         lines: list[str] = []
-        with (log_path.open("w", encoding="utf-8") if log_path else _NullFile()) as log:
+        with (log_path.open("w", encoding="utf-8", newline="\n") if log_path else _NullFile()) as log:
             log.write(f"$ {_cmdline(cmd)}\n")
             proc = subprocess.Popen(cmd, cwd=cwd, env=child_env, stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT, text=True, encoding="utf-8",
@@ -290,6 +297,7 @@ class StandardCliAdapter(EngineAdapter):
     import_script = "import_script.py"
     roundtrip_script = "roundtrip_test.py"
     roundtrip_mode = "bytes"                 # bytes | json
+    zero_import_fill = "blank"               # blank | identity：零翻譯導入時 translated 清空、或設成 original
 
     def extra_validate_args(self, p: Project, m: EngineMatch | None) -> list[str]:
         return []
@@ -348,7 +356,9 @@ class StandardCliAdapter(EngineAdapter):
         tmp = Path(tempfile.mkdtemp(prefix="agt-zero-", dir=p.root))
         try:
             blank = tmp / "zero.json"
-            script_json.save(script_json.blank_translations(script_json.load(p.script)), blank)
+            fill = (script_json.identity_translations if self.zero_import_fill == "identity"
+                    else script_json.blank_translations)
+            script_json.save(fill(script_json.load(p.script)), blank)
             out = tmp / "out"
             r = self.import_(p, blank, out=out)
             if not r.ok:
@@ -356,8 +366,13 @@ class StandardCliAdapter(EngineAdapter):
                 return r
             d = compare_trees(self.data_dir(p.extracted), self.data_dir(out), mode=self.roundtrip_mode)
             summary = d.summary("extracted", "zero-import")
+            ok = d.ok
+            if not d.same and not d.different:  # 導入什麼都沒寫出來 → 沒比到任何檔案，不算過
+                ok = False
+                summary = ("零翻譯導入沒有產生任何檔案，比對空轉（vendored 導入腳本可能會略過沒有譯文的檔案："
+                           "轉接器改 zero_import_fill = \"identity\"）\n" + summary)
             print(summary)
-            return StepResult(ok=d.ok, cmd=r.cmd, returncode=0 if d.ok else 1,
+            return StepResult(ok=ok, cmd=r.cmd, returncode=0 if ok else 1,
                               log_path=r.log_path, summary=summary, output=r.output)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)

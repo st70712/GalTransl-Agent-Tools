@@ -33,6 +33,8 @@ def _find_game_root(game_dir: Path, max_depth: int = 2) -> tuple[Path, str] | No
 class RpgMakerAdapter(StandardCliAdapter):
     name = "rpgmaker_mv_mz"
     roundtrip_mode = "json"          # JSON 重新序列化後空白不同，用 json.load 相等比對
+    zero_import_fill = "identity"    # vendored import_script 會略過沒有譯文的檔案：空譯文導入什麼都不寫、關卡空轉；
+                                     # 改用 translated=original，13 個有字串的 JSON 都會重寫並與原檔比對
 
     # -- 偵測 ---------------------------------------------------------------
 

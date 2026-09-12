@@ -10,6 +10,7 @@
 # 換機器時重跑本腳本即可重建；不碰 conda 環境。
 # Windows：在 Git Bash 執行同一指令；uv 請先 `pip install uv`（或 `winget install astral-sh.uv`），venv 直譯器在 Scripts/python.exe。
 set -euo pipefail
+export PYTHONUTF8=1 PYTHONIOENCODING=utf-8   # 本腳本呼叫的 python 印 ✓／中文，Windows 主控台預設 cp950 會炸
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENGINE="${1:-}"; MODE="${2:-}"
 [[ -n "$ENGINE" ]] || { echo "用法: $0 <engine> [--check]" >&2; exit 2; }
