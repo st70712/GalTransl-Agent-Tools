@@ -103,6 +103,8 @@ dgxluna 上若某個專案有 `original/`（遊戲搬得過來），那個專案
 1. `git clone git@github.com:st70712/GalTransl-Agent-Tools.git`（push 要用：先在筆電放 SSH key，或用 Git Credential Manager 走 https）。
 2. `python --version` ≥ 3.11（官方安裝器；Git Bash 裡叫 `python`，沒有 `python3`）。
 3. `pip install uv`（或 `winget install astral-sh.uv`）——`setup_env.sh` 在 Windows 不會自動裝。
+   Microsoft Store 版 Python 會把 `uv.exe` 裝進 `…\LocalCache\local-packages\Python311\Scripts`（不在 PATH，`which uv` 找不到）；
+   `agt env` 與 `setup_env.sh` 會透過 pip 套件 `uv` 的 `find_uv_bin()` 自己找到，不必改 PATH。
 4. `cp config.local.example.yaml config.local.yaml`，填 `site: workstation`、`handoff_dir`（Google Drive 桌面版的資料夾；沒有就留空）。
 5. `setx PYTHONUTF8 1`（重開終端機生效；`agt.py` 與 vendored 腳本自己也會強制 UTF-8，這是保險）。
 6. 需要 Unity 時：`bash tools/setup_env.sh unity_textasset`（venv 在 `.venv-unity/Scripts/python.exe`，轉接器自動用）。
