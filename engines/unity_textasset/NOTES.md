@@ -36,7 +36,8 @@
 ## 控制碼
 - value：`<param#…>`（遺失＝名字不見，退回原文）；style：TextMeshPro 標籤（`<size>`、`<color>`…）
 - `literal_newline_policy: keep`——`Dialog` 指令本來就用字面 `\n`
-- `speaker`（`Name=みなみ／あなた／メシア`）標為 optional+risky：不確定遊戲是否也拿它查角色資產，實機確認前不翻
+- `speaker`（`Name=みなみ／あなた／メシア`）：**實測只是名字牌顯示文字**（v1b：翻成 南／你／彌賽亞 後立繪、表情正常），profile 已改為預設翻譯。
+  做法：用固定對照直接填（みなみ→南、あなた→你、メシア→彌賽亞、2人共→兩人），不交給模型，才會與對話內譯名一致
 
 ## 補丁步驟
 - 交付物只有 `<標題>_Data/resources.assets`（覆蓋，原檔改 `.orig`）。
@@ -69,6 +70,10 @@
 - 字面 `\n`：`Data_SystemMessage` 原文就用字面 `\n`，`Data_Event` 用真換行 → profile 用 `convert_if_original_lacks`（原文沒有字面 `\n` 才轉成真換行）。
 - 模型會把 みなみ 譯成「南」，但名字牌（Name=，speaker 未翻）與 `<param#her_name>` 預設值（C# 常數）仍是 みなみ → 名字一致性要先決定。
 - 偶發退化輸出（「好大啊啊啊啊…」重複到吃掉 `</size>`）：check_codes 的富文本標籤／控制碼檢查會攔到。
+
+## 交付紀錄
+- RJ01483219 v1（2026-09-11）：dialog/choice/system/database 100%，名字牌未翻 → 實機通過。
+- v1b（2026-09-12）：加名字牌 1318 條 → 實機通過，**最終版**。使用者決定不處理 `<param#her_name>` 預設值（遊戲無改名功能、C# 常數仍是 みなみ）與標題選單假名 UI。
 
 ## 實機驗收
 - 遊戲開得起來（重新序列化的 resources.assets 被接受）——最大未知數

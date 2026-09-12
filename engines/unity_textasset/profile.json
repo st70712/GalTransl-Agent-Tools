@@ -75,10 +75,10 @@
       "description": "沒有規則的表：含日文的字串欄位"
     },
     "speaker": {
-      "priority": 10,
-      "default": "optional",
-      "risky": true,
-      "description": "說話者名字（Name=）；可能同時被拿去查角色資產，先實機驗證再翻"
+      "priority": 3,
+      "default": "translate",
+      "risky": false,
+      "description": "說話者名字（DrawMessageWindow 的 Name=、SkinshipMessage.SpeachCharaName）。RJ01483219 實測：只是名字牌顯示文字，立繪／表情不依賴它，可直接翻；建議用固定對照（glossary）而非交給模型，保證與對話內譯名一致"
     },
     "label_memo": {
       "priority": 90,
@@ -142,10 +142,10 @@
   "acceptance_checklist": [
     "遊戲開得起來（UnityPy 重新序列化的 resources.assets 被接受）",
     "對話視窗顯示中文，不是方框（TMP 字型缺字）",
-    "說話者名字牌、立繪正常（若有翻 speaker）",
     "選項、話題標題、道具／技能說明",
     "<param#her_name> 之類的佔位符有被換成名字，不是字面顯示",
-    "多行對話沒有超出訊息框"
+    "多行對話沒有超出訊息框",
+    "說話者名字牌顯示譯名，立繪／表情正常（RJ01483219 已驗證 Name= 只是顯示文字）"
   ],
   "docs": [
     "engines/unity_textasset/NOTES.md"
