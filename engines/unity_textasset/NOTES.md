@@ -150,6 +150,7 @@
 2. 資源區塊 1.7 GB：比對用 memoryview 雜湊（`resource_digests`），不複製 bytes；roundtrip 兩個 env 同時在記憶體約 4 GB，筆電 32 GB 沒問題。
 3. Windows 上 UnityPy 開著的散檔 `unlink` 會 PermissionError（RJ01483219 迴歸時撞到）；roundtrip 不刪暫存檔。
 4. `packer="original"` 對 LZ4HC 是 NotImplemented → 明確 `"lz4"`。
+5. verify 曾對 MonoBehaviour 葉節點差異數設上限 2000（防「結構整個變了」），全量導入 2774 條合法譯文就被誤攔。結構壞掉 `tree_diff` 本來就只回一筆，上限已拿掉。
 
 ### 實機驗收
 - 原版 playtest 15 s 存活；V0（假譯文 12 條，只重存 bundle）20 s 存活；A（V0 + 字型注入）20 s 存活，無 crash.dmp／Player.log（2026-09-12 20:33）。
