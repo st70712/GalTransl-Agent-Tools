@@ -92,6 +92,16 @@ class HandoffRoundTrip(unittest.TestCase):
         self.assertEqual(it.kind, "bundle_zip")
         self.assertEqual(it.manifest["game"], "demo")
         self.assertEqual(handoff.classify(self.bundle1.parent).kind, "bundle_pool")
+        # 當層沒有就往下找一層：pack 是複製到 <handoff_dir>/<game>/handoff/，
+        # 使用者通常指到 <handoff_dir>/<game>（CLAUDE.md 第 6 節）
+        drive = self.tmp / "drive" / "demo"
+        (drive / "handoff").mkdir(parents=True)
+        shutil.copy2(self.bundle1, drive / "handoff" / self.bundle1.name)
+        it = handoff.classify(drive)
+        self.assertEqual(it.kind, "bundle_pool")
+        self.assertEqual([c.name for c in it.candidates], [self.bundle1.name])
+        # 目錄本身就是交接包／專案時，仍然優先當它自己，不去掃子目錄
+        self.assertEqual(handoff.classify(self.bundle1.parent.parent).kind, "bundle_dir")
         self.assertEqual(handoff.classify(DEMO).kind, "game_dir")
         self.assertEqual(handoff.classify(self.tmp / "nope").kind, "missing")
         gz = self.tmp / "game.zip"
@@ -190,6 +200,28 @@ class HandoffRoundTrip(unittest.TestCase):
 
 
 class MergeStates(unittest.TestCase):
+    def test_pick_latest_one_level_down_and_shallow_wins(self):
+        tmp = Path(tempfile.mkdtemp(prefix="agt-test-pick-"))
+        self.addCleanup(shutil.rmtree, tmp, True)
+        (tmp / "handoff").mkdir()
+        deep = tmp / "handoff" / "demo-003-to-translator-20260101-0101.zip"
+        deep.write_bytes(b"x")
+        # 當層沒有 → 往下一層找到
+        self.assertEqual([f.name for f in handoff.pick_latest(tmp)], [deep.name])
+        # to_site 過濾在下一層也要生效
+        self.assertEqual(handoff.pick_latest(tmp, "workstation"), [])
+        self.assertEqual([f.name for f in handoff.pick_latest(tmp, "translator")], [deep.name])
+        # 當層有就只看當層，不再往下（避免撈到舊的）
+        shallow = tmp / "demo-002-to-translator-20260101-0202.zip"
+        shallow.write_bytes(b"x")
+        self.assertEqual([f.name for f in handoff.pick_latest(tmp)], [shallow.name])
+        # 檔名不合規的 zip 不算交接包
+        other = Path(tempfile.mkdtemp(prefix="agt-test-pick2-"))
+        self.addCleanup(shutil.rmtree, other, True)
+        (other / "sub").mkdir()
+        (other / "sub" / "random.zip").write_bytes(b"x")
+        self.assertEqual(handoff.pick_latest(other), [])
+
     def test_merge_prefers_newer_gate_and_unions_history(self):
         local = {"engine": {"engine": "x"}, "gates": {"a": {"ok": True, "at": "2026-01-01 10:00:00", "summary": "L"},
                                                      "b": {"ok": False, "at": "2026-01-01 09:00:00", "summary": "L"}},

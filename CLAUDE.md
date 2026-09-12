@@ -82,7 +82,7 @@ projects/<game>/    每款遊戲的工作目錄（不進 git）：original/ extr
 
 `projects/<game>/`：`original/` 唯讀（symlink／junction；翻譯端骨架專案沒有）；`exported/` 放 `script.json`、`format_specification.json`、
 `.agt.json`（sidecar，記引擎／編碼）、`untranslated.json`、`.agt_checkpoint.json`；`translated/` 每次 import 整個重建；`out/` 是交付物 + `安裝說明.txt`；
-`handoff/` 放交接包 zip；`glossary.txt`（選用）格式 `原文->譯文 // 備註`；`font_charset.txt`／`charset_map.json`（選用）給 fix_text 做缺字檢查；
+`handoff/` 放交接包 zip；`glossary.txt`（選用）格式 `原文->譯文#備註`（**備註符號是 `#` 不是 `//`**，見 `docs/translation-quality.md`）；`font_charset.txt`／`charset_map.json`（選用）給 fix_text 做缺字檢查；
 `HANDOFF.md` 是跨機／跨對話交接備忘（範本 `docs/templates/HANDOFF.template.md`）。
 
 ## 5. 硬性關卡（順序不可調，任一失敗就停）
@@ -130,6 +130,10 @@ projects/<game>/    每款遊戲的工作目錄（不進 git）：original/ extr
   `glossary.txt`、`font_charset.txt`、`charset_map.json`、`unity_rules.json`、`HANDOFF.md`、`logs/*.log`。檔名 `<game>-NNN-to-<site>-<時間>.zip`，根目錄 `handoff.json` manifest（含每檔 sha256、repo HEAD）。
 - **傳輸兩條路**：`config.local.yaml` 設 `handoff_dir`（dgxluna `~/gdrive/GalTransl-Agent-Tools`，筆電 Google Drive 桌面版資料夾）→ pack 自動複製到 `<handoff_dir>/<game>/handoff/`，
   收方 `agt detect <那個資料夾>` 挑最新；沒設就留在 `projects/<game>/handoff/`，把路徑告訴使用者手動搬。rclone／Drive 是非同步上傳：pack 後 `ls -la` 確認大小再叫對方收。
+- **找交接包會往下找一層**：`detect`／`unpack` 先看你給的那層有沒有 `<game>-NNN-to-<site>-<時間>.zip`，
+  當層沒有才往下找一層（`core/handoff.pick_latest`）。所以指到 `<handoff_dir>/<game>` 或 `<handoff_dir>/<game>/handoff/` 都找得到。
+  **只往下一層**，不整棵掃——指到 `<handoff_dir>`（底下是多個遊戲）就找不到，要指到某一款。
+  目錄本身就是交接包或專案（有 `handoff.json`，或 `agt.json` + `exported/script.json`）時優先當它自己，不去掃子目錄。
 - **git 規則**：`pack` 前 commit + push（有未提交變更 pack 會拒絕，`--allow-dirty` 才放行）、`unpack` 前 `git pull`；manifest 的 HEAD 不一致會警告。
   **其他時候不主動 push、不設新 remote。**
 - **`HANDOFF.md`**：每次 pack 前在「交接紀錄」最上方加一段（本站完成／請對方做／需要對方回答／實機回報）。收包後第一件事是讀它。

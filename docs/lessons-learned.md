@@ -94,6 +94,48 @@
 - **測試不能碰真實設定**：`mock.patch.dict(os.environ, {"AGT_HANDOFF_DIR": ""})` 原本無效（空字串不覆蓋），測試交接包真的被複製到 Google Drive。
   環境變數設成空字串現在也算覆蓋。
 
+## 翻譯端（dgxluna，RJ01657316 首次兩站接力，2026-09-12）
+
+- **glossary 的備註符號是 `#`，`//` 會被當成譯文**：GalTransl 的 `CGptDict` 把 `->` 與 `#` 一律換成 TAB 再切三欄，
+  完全不認 `//`。`センパイ->學長 // 全篇統一` 解析出的譯文是 `學長 // 全篇統一`，整串註解被塞進 prompt 的 `[Glossary]`。
+  本專案的文件（`CLAUDE.md`、`docs/translation-quality.md`）原本就寫錯 `//`，而 RJ01483219 沒有 glossary.txt，
+  所以自動載入這條路是**第一次真的被走到**才爆出來。對策：寫完 glossary 一定用 `CGptDict` 載入印 `replace_word` 確認；
+  純註解行用 `#` 開頭且**不能含 `->`**（含了會產生 `search_word` 為空字串的條目，空字串比對到任何文字，每個批次都被汙染）。
+- **`fix_text` 的 opencc `t2jp` 退路在 dgxluna 上永遠不生效**：nllb-env 的 opencc 沒有 `t2jp.json`，
+  `except Exception` 把 `FileNotFoundError` 吃掉，一律印 `t2jp 自動: 0 種`。繁→日字形（值→値、啟→啓）只能靠
+  `charset_map.json` 人工帶。**「自動 0 種」不等於「沒缺字」**，要看後面的缺字清單。
+- **`\r\n` 不是本 repo 在處理的**：`translate.py`／`fix_text.py`／`core/codes.py`／vendor `import_script.py` 全都只比
+  `count("\n")`，CRLF 與 LF 行數相同，所以「原文 CRLF、譯文只有 LF」**不會有任何警告**（#1 交接包與 NOTES 原本都寫成
+  「validate 會警告」，是錯的）。真正保住 CRLF 的是 `GalTransl/Backend/SakuraTranslate.py`：送出前把 `\r\n`／`\n`
+  攤平成字面兩字元 `\n`，回來後依原文用哪一種還原。實測可靠，但每個專案還是要量一次（模型多吐／少吐一個標記就多一行少一行）。
+- **只有 4 種原文的 1329 條名字牌不要送模型**：`context=speaker` 直接用固定對照填完，翻譯量從 2840 降到 1511，
+  也消掉「名字牌與對話裡譯名不一致」的風險。profile 的 `speaker` context 說明本來就這樣建議。
+- **`--limit` 是「去重後要送模型的條數」**，不是原始條數：套用順序是 `should_translate` → `--filter` → 翻譯記憶 → 去重 → `--limit`。
+  先填好名字牌再下 `--filter`，篩出來的數字會跟著變（58 → 31）。
+- **smoke 樣本要自己挑到涵蓋所有換行形狀**：HANDOFF 給的 `--limit 6 --filter 'level0/TextMeshProUGUI'` 只會拿到前 6 條，
+  剛好漏掉唯一一條結尾單獨 `\n` 的 UI 標籤。改成列舉 path_id（`@(131|132|133|134|139|140)#`）才測得到。
+- **訊息窗排版要量原文，不能只看 `line_count` 警告**：原文的「最多幾行、單行最寬幾個半形」是開發者自己排給訊息窗的，
+  就是上限（RJ01657316：3 行／49 寬，235 條原文用滿 3 行）。模型會超——5 條吐成 4 行、6 條單行最寬 56。
+  `line_count` 只比行數，**抓不到「行數沒變但某行變寬」**。對策：G8 量「最大行數」與「單行最大寬」兩個數字，
+  超出的用標點優先重排壓回去（不改用詞就排得進：先依標點切塊、塊跟著標點留在塊尾，所以行首不會是逗號；
+  塊本身超寬才硬切，且不在標點前切）。
+- **opencc `s2twp` 會過度轉換，而且每次 `fix_text` 都會再犯一次**：`貞操觀念的` → `貞操觀唸的`
+  （`貞操觀念` 單獨轉卻不會，看上下文）。事後手改沒用，下次跑 fix_text 又被轉回去。
+  對策：放進 `charset_map.json` 的**詞級**鍵（多字元鍵），它跑在 step 7、opencc 在 step 1，擋得住。
+  s2twp 也會**漏轉**：`想象` 沒變成 `想像`（9 條）。G8 要掃一份大陸用詞／過度轉換清單。
+- **`fix_text` 的統計數字不是淨變更數**：`簡繁正規化 7`／`缺字替換 6` 是各步驟碰過的條目數；
+  opencc 把 `恩` 轉成 `嗯`、替字表再換回 `恩`，一來一回淨變更 0。要確認有沒有真的變，就連跑兩次 diff
+  （RJ01657316 實測第二次輸出逐位元組相同，已收斂）。
+- **模型會留下日文敬稱**：`後輩ちゃん` 有 41 條翻成「學妹醬」、97 條翻成「學妹」。glossary 寫了 `後輩ちゃん->學妹`
+  也只是建議，不是強制。G8 要統計同一原文的譯法分布之外，也要掃「醬／桑／君」這類殘留敬稱。
+- **`agt detect <handoff_dir>/<game>` 找不到交接包**（已修）：`core/handoff.pick_latest` 原本用 `glob("*.zip")` 只看當層，
+  但 `handoff pack` 是複製到 `<handoff_dir>/<game>/handoff/`，剛好差一層（同函式的 `_game_hints` 用的卻是 `rglob`，
+  所以遊戲特徵找得到、交接包找不到）。CLAUDE.md 第 6 節寫「收方 `agt detect <那個資料夾>`」，是文件與行為不一致。
+  修法：當層找不到才往下找一層。**只找一層**——`<handoff_dir>` 底下是多個遊戲，整棵 rglob 會把別款遊戲的包混進同一個候選清單，
+  `unpack` 又是「取 seq 最大的」，混到別款就會收錯專案。目錄本身是交接包或專案時仍優先當它自己，不掃子目錄。
+- **`unpack` 前先切好分支，repo 不同步警告就不會出現**：manifest 記的 `repo_head` 是實機端 pack 時的 HEAD
+  （這次在 `feat/unity-bundle-mono`，不是 main）。在 main 上 unpack 會警告；先 `git fetch && git checkout <分支>` 再收就乾淨。
+
 ## 工具鏈事故
 
 - **檢查點以位置序號為鍵**（GalTransl-Angle，2026-07-15）：導出範圍從 1520 變 1816 條後沒刪 `.script_checkpoint.json`，545 條譯文靜默錯位（`防御バフ_自分` 變「攻擊增益_塞拉」）。

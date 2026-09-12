@@ -221,16 +221,37 @@ def _game_hints(names: list[str]) -> list[str]:
     return hints
 
 
-def pick_latest(d: Path, to_site: str | None = None) -> list[Path]:
-    """目錄裡的交接包，依 seq 由新到舊；給了 to_site 就只留寄給該站的。"""
+def _scan_zips(d: Path, to_site: str | None) -> list[tuple[int, str, Path]]:
     found: list[tuple[int, str, Path]] = []
-    for f in d.glob("*.zip"):
+    try:
+        entries = sorted(d.glob("*.zip"))
+    except OSError:
+        return found
+    for f in entries:
         info = parse_bundle_name(f.name)
         if info is None:
             continue
         if to_site and info["to_site"] != to_site:
             continue
         found.append((info["seq"], info["ts"], f))
+    return found
+
+
+def pick_latest(d: Path, to_site: str | None = None) -> list[Path]:
+    """目錄裡的交接包，依 seq 由新到舊；給了 to_site 就只留寄給該站的。
+
+    當層找不到就往下找一層：`handoff pack` 是複製到 `<handoff_dir>/<game>/handoff/`，
+    而使用者（與 CLAUDE.md 第 6 節）通常是指到 `<handoff_dir>/<game>`。
+    只往下一層，不整棵 rglob——避免把別的專案或遊戲目錄裡的 zip 也撈進來。
+    """
+    found = _scan_zips(d, to_site)
+    if not found:
+        try:
+            subdirs = sorted(q for q in d.iterdir() if q.is_dir())
+        except OSError:
+            subdirs = []
+        for sub in subdirs:
+            found.extend(_scan_zips(sub, to_site))
     return [f for _, _, f in sorted(found, reverse=True)]
 
 
