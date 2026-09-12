@@ -144,4 +144,7 @@
 
 ### 實機驗收
 - 原版 playtest 15 s 存活；V0（假譯文 12 條，只重存 bundle）20 s 存活；A（V0 + 字型注入）20 s 存活，無 crash.dmp／Player.log（2026-09-12 20:33）。
-- 待使用者目視：同意畫面（level0）與開場旁白的中文、你／她／嗎 是否為方框；正式 smoke 由翻譯端 20 條回包後做。
+- **使用者目視變體 A 通過（2026-09-12 20:45）**：開場旁白中文正常，你／她／嗎／戶／溫／另 全部畫出——重存的 bundle 遊戲吃、TopicCatalog 譯文生效、備援字型注入生效。
+  瑕疵：備援字是 Noto **Regular**，對話主字型是 NotoSansJP-**Bold** 靜態圖集，缺字部分肉眼可見細一號；要一致得注入 Bold 版字型檔（TMP 備援不會套粗體）。
+  同意畫面（level0 的 TextMeshProUGUI）這次沒出現——推測首次開原版時已回答過、狀態存在 LocalLow/Unity/ 之下；UI 譯文是否顯示要等清除狀態或翻譯端 smoke 再看。
+  已 `mark user_boot_ok`；翻譯端可依 CLAUDE.md §6 例外自行 mark 直接進 G7。
