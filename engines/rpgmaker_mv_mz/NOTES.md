@@ -53,6 +53,10 @@ vendored 工具**不在程式裡檢查控制碼**（只寫在 spec 給模型看�
 6. vendored 工作樹的 `Game/www/data` 曾被清空，示範資料要拿 git HEAD 的版本（見 `VENDOR.md`）。
 7. 使用者慣用 `translate_rpgmaker.py --priority 7`（翻到 actor 為止），對應本專案 `--priority 7`。
 
+- **零翻譯導入曾經空轉**（2026-09-12 Windows 驗收發現）：vendored `import_script.py` 對沒有譯文的檔案 `continue`，空譯文導入
+  一個 JSON 都不寫，`0 個檔案相同，0 個不同` 仍判 ✓。轉接器改 `zero_import_fill = "identity"`（譯文＝原文），
+  13 個有字串的 JSON 全部重寫並以 `json.load` 相等比對；`StandardCliAdapter` 也對「比不到任何檔案」判失敗。
+
 ## 實機驗收
 
 - 遊戲開得起來、沒有 Loading Error

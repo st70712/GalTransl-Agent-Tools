@@ -37,7 +37,13 @@ from core import (  # noqa: E402
     site,
     state,
 )
-from core.adapter import EngineAdapter, EngineMatch, Project, StepResult  # noqa: E402
+from core.adapter import (  # noqa: E402
+    EngineAdapter,
+    EngineMatch,
+    Project,
+    StepResult,
+    format_cmdline,
+)
 from core.profile import load_profile  # noqa: E402
 
 GATE_SEQUENCE = ("prepare", "roundtrip", "export", "zero_import", "verify", "breakage")
@@ -109,13 +115,13 @@ def cmd_detect(a) -> int:
         print(f"  專案 {man.get('game') or '?'}  seq #{man.get('seq', '?')}  "
               f"{man.get('from_site', '?')} → {man.get('to_site', '?')}  引擎 {man.get('engine') or '?'}  "
               f"打包於 {man.get('packed_at', '?')} @ {man.get('host', '?')}")
-        print(f"→ $PY agt.py handoff unpack {intake.path}")
+        print(f"→ $PY agt.py handoff unpack {format_cmdline([str(intake.path)])}")
         return 0
     if intake.kind == "bundle_pool":
         print(f"這個資料夾裡有 {len(intake.candidates)} 個交接包（新→舊）：")
         for c in intake.candidates[:10]:
             print(f"  {c.name}")
-        print(f"→ $PY agt.py handoff unpack {intake.path}   # 自動取寄給本站、seq 最大的那個")
+        print(f"→ $PY agt.py handoff unpack {format_cmdline([str(intake.path)])}   # 自動取寄給本站、seq 最大的那個")
         return 0
     if intake.kind == "project_dir":
         print(f"這是既有專案 projects/{intake.path.name}/ → $PY agt.py status {intake.path.name}")

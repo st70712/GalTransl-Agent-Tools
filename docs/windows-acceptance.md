@@ -3,6 +3,9 @@
 > 給筆電端 Claude Code 的交接文件。**這次的任務是驗證，不是做遊戲中文化**：照下面的項目逐條跑、把結果填進第 5 節、
 > 修掉能修的、commit 到同一分支、push 回 GitHub。dgxluna 端看完結果才 merge 進 main。
 > 背景：`CLAUDE.md` 第 2、3、6 節與 `docs/two-site.md`（兩站接力：實機端 Windows ↔ 翻譯端 dgxluna）。
+>
+> **狀態：2026-09-12 筆電端驗收通過（§5），dgxluna 端跨機 unpack／dry-run／pack 回傳通過，已 merge 進 main。**
+> 本檔留作日後 Windows 回歸清單；再跑一輪時把 §5 換成新紀錄。
 
 ## 0. 規則
 

@@ -1,0 +1,2 @@
+# shell 腳本固定 LF：Windows 端 core.autocrlf=true 會把 .sh 檢出成 CRLF，bash 可能把 \r 當成參數的一部分
+*.sh text eol=lf

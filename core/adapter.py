@@ -24,7 +24,7 @@ from .profile import EngineProfile, load_profile
 from .roundtrip import compare_trees
 
 
-def _cmdline(cmd: list[str]) -> str:
+def format_cmdline(cmd: list[str]) -> str:
     """印給人複製的命令列：Windows 用 cmd 風格引號（含反斜線的參數一律加雙引號，貼回 Git Bash 反斜線才不會被吃掉；
     cmd／PowerShell 也接受），其他平台用 POSIX。"""
     if os.name != "nt":
@@ -127,7 +127,7 @@ class StepResult:
 
     @property
     def cmdline(self) -> str:
-        return _cmdline(self.cmd)
+        return format_cmdline(self.cmd)
 
 
 class EngineAdapter(ABC):
@@ -209,14 +209,14 @@ class EngineAdapter(ABC):
         if logs_dir is not None:
             logs_dir.mkdir(parents=True, exist_ok=True)
             log_path = logs_dir / f"{log_name}-{datetime.now():%Y%m%d-%H%M%S}.log"
-        print(f"$ {_cmdline(cmd)}" + (f"   # cwd={cwd}" if cwd else ""), flush=True)
+        print(f"$ {format_cmdline(cmd)}" + (f"   # cwd={cwd}" if cwd else ""), flush=True)
         # 子行程一律 UTF-8 輸出（Windows 主控台預設 cp950，vendored 腳本印日文／中文會炸）
         child_env = {**os.environ, **(env or {})}
         child_env.setdefault("PYTHONUTF8", "1")
         child_env.setdefault("PYTHONIOENCODING", "utf-8")
         lines: list[str] = []
         with (log_path.open("w", encoding="utf-8", newline="\n") if log_path else _NullFile()) as log:
-            log.write(f"$ {_cmdline(cmd)}\n")
+            log.write(f"$ {format_cmdline(cmd)}\n")
             proc = subprocess.Popen(cmd, cwd=cwd, env=child_env, stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT, text=True, encoding="utf-8",
                                     errors="replace")

@@ -65,6 +65,8 @@ $PY agt.py export <game> [--merge PREV.json]
 ## G4 零翻譯導入 + verify（站點：實機）
 
 `gates` 會自動跑：把 `translated` 全清空導入到暫存目錄，輸出必須與 `extracted/` 相同；再跑
+（比不到任何檔案會判失敗——導入腳本略過沒譯文的檔案時關卡會空轉；轉接器用 `zero_import_fill = "identity"`（RPG Maker）
+或宣告 `zero_import_noop_ok`（Unity，往返由 `roundtrip_test.py` 涵蓋），見 `docs/new-adapter.md` §5）
 
 ```bash
 $PY agt.py verify <game>
