@@ -49,6 +49,30 @@
 - **環境依賴要在第一版就宣告**：UnityPy 一開始是臨時裝的，後來才補 `python_env` + `requirements.txt` + `setup_env.sh`。
   新引擎需要套件時，從一開始就走宣告路線，專案才搬得到別的機器。
 
+## Unity 第二例：單檔 bundle／Mono／ScriptableObject 文本（RJ01657316，2026-09-12）
+
+- **「有轉接器」不等於「這款能跑」**：同樣是 Unity 6，第二款遊戲的三個假設全部不同（散檔→單檔 `data.unity3d`、IL2CPP→Mono、
+  JSON TextAsset→`TopicCatalog` ScriptableObject），`detect` 連目錄都不認。轉接器要把「容器」「文本來源」「腳本後端」三件事分開設計，
+  每一層都用資料目錄的實際長相判斷，不要寫死檔名。
+- **Mono 建置的 type tree 直接從 `Managed/*.dll` 產生**（TypeTreeGeneratorAPI），比 IL2CPP 的錨點法可靠得多：119 個 MonoBehaviour
+  read→save 後 raw 全部相同，一次就過。IL2CPP 也能用（`GameAssembly.dll`＋`global-metadata.dat`），下次 Unity 先試 type tree 再想錨點。
+  例外：少數類別（`ImageCatalog`／`AudioCatalog`）產生的 type tree 讀不到底（`read_str out of bounds`）——只讀規則涵蓋的類別，其他一律 raw 比對。
+- **MonoScript 常在別的內部檔**（bundle 裡是 `globalgamemanagers.assets`），自己解 `m_Script` 指標會漏掉 external；交給 UnityPy 的 PPtr 解析，
+  而且要在掛 type tree 產生器**之前**（或暫時拿掉）讀，否則 `obj.read()` 會走 type tree 而炸在那些讀不到底的類別。
+- **bundle 解壓後比檔案大十倍**：164 MB 的 LZ4HC bundle 內含 1.7 GB 的 `resources.assets.resS`（未壓縮貼圖），UnityPy 全放記憶體；
+  比對資源區塊要對 memoryview 做雜湊，不要複製 bytes。LZ4 重存約 40 秒、165 MB；UnityPy 沒有 LZ4HC 編碼器，`packer="original"` 會撞 NotImplemented，
+  明確用 `"lz4"`（同一種區塊格式，Unity 讀得懂——V0 變體實機存活 20 秒證實）。
+- **ScriptableObject 裡「看起來像文字」的欄位大半是鍵**：`mPortrait`（立繪鍵）、`mVoice`（語音鍵）、`mJumpTo`、`mLabel`、`mIconName`，
+  還有整個 `ImageCatalog`／`AudioCatalog`。規則用 `path` 明確指定要導出的葉節點，並用 `when`（`mType` 0/1）分出台詞與選項；
+  `mType 2` 的 `mText` 是 `unlock:topic_001` 指令，`mType 3` 是演出列。導出後 grep 一次鍵名樣式（`シーン\d_`、`^[a-z]\d{2}_\d$`）當 G3 抽樣。
+- **內嵌 Font 不一定有 CJK**：這款只內嵌 LiberationSans／PerfectDOSVGA437，三套日文 TMP 靜態圖集（7129 字＝JIS 一二級）對 Big5 常用字只有 81.7%
+  （缺 你／她／嗎／說／溫／戶…）。對策改成「注入字型」：把別款遊戲抽出的 NotoSansJP OTF（`extract_font.py`）寫進 LiberationSans Font 物件的 `m_FontData`，
+  Unity 內建的動態備援 `LiberationSans SDF - Fallback` 就變成 CJK 動態字型，再掛成 TMP Settings 全域備援；靜態圖集一個位元組都不動。
+  這是比「靜態圖集動態化＋inline atlas（+32 MB）」小得多的單一變數。Noto 對 Big5 常用字 97.7%，剩下的 122 字（嗯／喔…）沿用 `charset_map.json` 替字。
+- **Windows 上 UnityPy 開著的散檔不能 unlink**（PermissionError），暫存檔留給系統清；bundle 因為整檔讀進記憶體沒這問題。
+- **一棒制在同機測試也要守**：實機端本地做「假譯文 smoke」（12 條含 你她嗎 的假譯文 + 字型注入）驗證管線與 bundle 可開，用的是 `script.json` 的副本，
+  `exported/` 一個位元組都沒動，交接包裡的東西仍是翻譯端的。
+
 ## 兩站接力（實機端 Windows ↔ 翻譯端 dgxluna，2026-09-12）
 
 - **碰遊戲檔的步驟與碰模型的步驟可以完全分開**：translate／fix_text／check_codes／validate 只讀 `exported/` + sidecar + profile，

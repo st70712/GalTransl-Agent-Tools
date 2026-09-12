@@ -1,6 +1,7 @@
 # Unity（JSON 表格 TextAsset）NOTES
 
-首例：RJ01483219《秘密のシェアハウスせいかつ》v1.07（OneUp／いぬすく圈，2026-09-11）。
+首例：RJ01483219《秘密のシェアハウスせいかつ》v1.07（OneUp／いぬすく圈，2026-09-11）——散檔、IL2CPP、JSON 表格 TextAsset。
+第二例：RJ01657316《騙され呑みニケーション》v1.0.2（おうち開発室，2026-09-12）——單檔 data.unity3d、Mono、ScriptableObject 文本，見檔尾。
 同作者的下一款很可能沿用同一套表格系統，`rules/RJ01483219.json` 可直接當範本。
 
 ## 辨識特徵
@@ -83,3 +84,64 @@
 - 開場對話顯示中文、不是方框（內建 NotoSansJP SDF 字型圖集缺字風險；缺字請回報是哪些字）
 - `<param#her_name>` 有被換成名字；多行台詞沒有超出訊息框；`<size>` 標籤沒有字面顯示
 - 第二階段：level0/level1 的 TextMeshProUGUI 標籤（122+4 個，raw 位移 88 起為 `m_text`）、bundle 內 MonoBehaviour（有 type tree）
+
+## 第二例：RJ01657316《騙され呑みニケーション》v1.0.2（おうち開発室，2026-09-12，兩站接力）
+
+同引擎、不同作者，三個假設全部翻掉：**單檔 `data.unity3d` bundle、Mono、文本在 ScriptableObject**。轉接器因此改成「容器／文本來源／腳本後端」三層各自判斷。
+
+### 辨識特徵
+- `*_Data/` 只有 `data.unity3d`（UnityFS v8，標頭 64 bytes 內有 `6000.4.1f1`）、`*.resource`、`Managed/*.dll`、`boot.config`；沒有 `globalgamemanagers` 散檔。
+- `Managed/ProjectRuntime.dll`＝遊戲程式（沒有 Assembly-CSharp）；無 `GameAssembly.dll` → Mono。
+- `agt detect` 信心 0.6（bundle 內容看不到 JSON 表），evidence 會說「文本在哪由 rules/<專案名>.json 決定」；`init` 照常。
+
+### 資料格式
+- bundle 內：`globalgamemanagers`、`globalgamemanagers.assets`（2276 個 MonoScript 都在這）、`sharedassets0–2.assets`、`level0–2`、`resources.assets`（4744 物件）、
+  三個 `.resS`（`resources.assets.resS` 解壓後 **1.7 GB**：整包 LZ4HC 壓成 164 MB）。
+- 文本：`resources.assets` 的 `TopicCatalog`（ScriptableObject，path_id 3706）：
+  `mTopics[62]{mTopicId, mLabel(話題標題), mIconName, mIsInitial, mNeedDrunkLevel, mLines[]}`，
+  `mLines[1510]{mType, mLabel, mSpeaker(後輩／あなた／店員), mPortrait(立繪鍵), mText, mJumpTo, mVoice(語音鍵)}`；
+  `mType` 0＝台詞、1＝選項（`mJumpTo` 是目標）、2＝指令（`mText`=`unlock:topic_001`）、3＝演出（`mPortrait`=`シーン1_カットイン_注文_*`）。
+  換行是 **`\r\n`**（CSV 匯入的痕跡），譯文要保持 `\r\n`。
+- UI：`TextMeshProUGUI.m_text`（118 個，66 個含日文；level0 同意畫面、level1/2 與 resources 的 prefab 重複各一份）。
+- 沒有 type tree：`Managed/*.dll` → `TypeTreeGeneratorAPI`（`unity_tables.typetree_generator`），`TopicCatalog` 與 118 個 TMP 物件 read→save raw 全部相同。
+  `ImageCatalog`／`AudioCatalog`／`UniversalRenderPipelineGlobalSettings` 的 type tree 讀到底會 `read_str out of bounds`——不在規則內就不讀。
+- 位址：`source_file = data.unity3d#resources.assets/TopicCatalog@3706`、`location = mTopics[3].mLines[12].mText`；UI 是 `data.unity3d#level0/TextMeshProUGUI@131` + `m_text`。
+- 規則檔 `rules/RJ01657316.json` 的 `monobehaviours` 區塊：`path`（`[*]`＝陣列每個元素）、`context`、`speaker_from`（同層欄位）、`when`（同層欄位值，`{"mType":[0]}`）。
+- 導出 2840 條：dialog 1334、speaker 1329、choice 111（話題標題 40 + 選項 71）、ui 66。
+
+### 絕不導出
+- `mCsvFolder`、`mTopicId`、`mIconName`、`mLines[].mLabel`／`mJumpTo`（跳躍標籤）、`mPortrait`（立繪鍵）、`mVoice`（語音鍵）、`mType 2/3` 列。
+- `ImageCatalog`（18,089 個日文字元全是圖片鍵）、`AudioCatalog`（SE 名 くぱぁ／嚥下）、`SlotLabel`／`GenreSlotTable`／`ViewManager`／`Scene2HelpView`（編輯器分類標籤）。
+- G3 抽樣用 grep 確認：導出裡沒有 `シーン\d_`、`^[a-z]\d{2}_\d$`、`unlock:` 樣式的字串（0 條）。
+
+### 控制碼
+- 沒有 `<param#…>`；富文本標籤規則沿用。`\r\n` 換行：validate 會對「原文 `\r\n`、譯文只有 `\n`」給警告，fix_text／翻譯端請保持 `\r\n`。
+- speaker：`後輩`／`あなた`／`店員`（各 665／661／2）＋ 1 條 `あなた 後輩`；用 glossary 固定對照，不交給模型。
+
+### 補丁步驟
+- `import` 只重寫整個 `data.unity3d`（`save(packer="lz4")`，約 40 秒、165 MB；原檔 LZ4HC，UnityPy 沒有 HC 編碼器）；`verify` 展開 bundle 逐內部檔比對：
+  未涵蓋物件 raw 相同、規則涵蓋的 MonoBehaviour 只有規則路徑上的字串葉節點可以不同、`.resS` 雜湊相同。
+- `breakage`：刪掉 `mTopics[0].mLines` 最後一個元素 → verify 報「不在規則內的欄位被改了（長度 33 → 32）」✓。
+- 交付物：`騙され呑みニケーション_Data/data.unity3d`（165–169 MB）→ zip 放 `<handoff_dir>/RJ01657316/`；安裝說明備份行 `ren data.unity3d data.unity3d.orig`。
+- 字型（見下）：`profile.patch.font_inject` 在 `package` 時自動跑 `inject_font.py`，字型檔在 `projects/RJ01657316/font/NotoSansJP-Regular.otf`
+  （用 `extract_font.py` 從 RJ01483219 抽出，不進 git）。
+
+### 字型
+- 三套 TMP 靜態圖集 NotoSansJP-Bold／Medium（sharedassets0）、KiwiMaru-Medium（resources）各 7129 字＝JIS 一二級，4096×8192 串流在 bundle 內的 `.resS`。
+  對 Big5 常用字 **81.7%（缺 989）**：你／她／嗎／說／溫／戶／喔／啊／呢 全缺——不處理就沒法翻。
+- 內嵌 Font 只有 `LiberationSans`（902，350 KB）與 `PerfectDOSVGA437`，**沒有 CJK 字型檔**，所以第一例的「靜態圖集動態化」沒有來源可指。
+- 對策 A（`inject_font.py`，單一變數）：`LiberationSans.m_FontData` ← NotoSansJP-Regular.otf（4.5 MB，16,734 字，對 Big5 常用字 97.7%）；
+  Unity 內建的 `LiberationSans SDF - Fallback`（3693，動態、多圖集、來源＝902）跟著變成 CJK 動態字型，更新其 `m_FaceInfo`；
+  `TMP Settings.m_fallbackFontAssets = [3693]`。靜態圖集完全不動。剩下 122 字（嗯／喔…）用 `charset_map.json`（沿用 `charsets/NotoSansJP-Regular.map.json`）替字。
+- 對策 B（未做）：`tmp_font_dynamic.py` 改 type tree 版並支援 bundle 內 `.resS`，把對話用的那套靜態圖集動態化（+32 MB）。A 出 □ 才做。
+
+### 踩過的坑
+1. `script_classes` 自己解 `m_Script` 指標（offset 12）全錯：實際 offset 16（`m_Enabled` 對齊到 4），且 fileID=1 指向 `globalgamemanagers.assets` 的 external。
+   改用 UnityPy 基底解析＋PPtr，但要在掛 type tree 產生器之前（或暫時拿掉）呼叫，否則 `obj.read()` 走 type tree 炸在 `ImageCatalog`。
+2. 資源區塊 1.7 GB：比對用 memoryview 雜湊（`resource_digests`），不複製 bytes；roundtrip 兩個 env 同時在記憶體約 4 GB，筆電 32 GB 沒問題。
+3. Windows 上 UnityPy 開著的散檔 `unlink` 會 PermissionError（RJ01483219 迴歸時撞到）；roundtrip 不刪暫存檔。
+4. `packer="original"` 對 LZ4HC 是 NotImplemented → 明確 `"lz4"`。
+
+### 實機驗收
+- 原版 playtest 15 s 存活；V0（假譯文 12 條，只重存 bundle）20 s 存活；A（V0 + 字型注入）20 s 存活，無 crash.dmp／Player.log（2026-09-12 20:33）。
+- 待使用者目視：同意畫面（level0）與開場旁白的中文、你／她／嗎 是否為方框；正式 smoke 由翻譯端 20 條回包後做。

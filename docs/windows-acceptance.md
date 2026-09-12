@@ -105,6 +105,16 @@ uv 0.12.13（`pip install uv`）；開發人員模式＝**關**；Git Bash＝git
 - 這台的 `git` 沒有全域身分，本 repo 以 `git config user.name "Jim Hsieh"`、`user.email st70712@gmail.com`（repo-local）提交；要改請自行 `git config`。
 - `.sh` 在 `core.autocrlf=true` 下 checkout 成 CRLF（`tools/llama_server.sh`），實測 Git Bash 能跑 CRLF 腳本，暫不加 `.gitattributes`。
 
+### 5b. 第二款 Unity 實戰（RJ01657316，2026-09-12，分支 `feat/unity-bundle-mono`）
+
+| 項目 | 結果 | 備註 |
+|---|---|---|
+| detect／init | 通過 | 單檔 `data.unity3d`（UnityFS，LZ4HC）、Mono；原本的轉接器連目錄都不認，`_find_root`／`find_data_dir` 改成 `globalgamemanagers` 或 `data.unity3d` 皆可 |
+| gates | 通過 | prepare 量測 8846 物件、3 個資源區塊（`resources.assets.resS` 解壓後 1.7 GB）；roundtrip 逐物件＋資源區塊雜湊＋119 個 MonoBehaviour type tree 往返；export 2840 條（dialog 1334／speaker 1329／choice 111／ui 66）；breakage 刪 `mTopics[0].mLines` 一個元素被 verify 攔到 |
+| 字型量測 | 完成 | 三套靜態 TMP 圖集 7129 字，對 Big5 常用字 81.7%（缺 989）；NotoSansJP OTF 97.7%（缺 122）→ 對策 A 備援字型注入（`inject_font.py`） |
+| playtest | 通過 | 原版 15 s、V0（假譯文 12 條，只重存 bundle）20 s、A（V0＋字型注入）20 s 都存活、無 crash.dmp；目視待使用者 |
+| 交接包 #1 | 見 HANDOFF.md | `projects/RJ01657316/HANDOFF.md` 寫明翻譯端要先 checkout 分支 |
+
 ## 6. 收尾（筆電端）
 
 1. 清掉測試用專案：`rm -rf projects/demo projects/demo2`（真實遊戲的專案可留）。`git status --short` 應乾淨（除了本檔與你的修正）。
