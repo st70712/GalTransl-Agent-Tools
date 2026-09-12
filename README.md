@@ -4,7 +4,7 @@ Agent 驅動的遊戲中文化補丁工具箱。在 Claude Code 裡照 `CLAUDE.m
 導出文本 → 本機 Sakura 模型翻譯 → 整理／檢查譯文 → 導入 → 打包 → 使用者實機驗收。
 
 已支援：**RPG Maker MV/MZ**、**WOLF RPG Editor 2.x/3.x**（兩套工具原樣搬入自 GalTransl-RPGmaker 與 GalTransl-sister，通過實機驗證）。
-其他引擎（Bishop、TyranoScript、KiriKiri、Unity、Ren'Py…）有線索與接入指引，見 `docs/engines.md`。
+已支援：RPG Maker MV/MZ、WOLF RPG 2.x/3.x、Unity（JSON 表格 TextAsset，含 TextMeshPro 動態字型）。其他引擎（Bishop、TyranoScript、KiriKiri、Ren'Py…）有線索與接入指引，見 `docs/engines.md`。
 
 ## 引擎專用環境
 

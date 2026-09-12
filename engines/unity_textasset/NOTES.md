@@ -58,6 +58,8 @@
    `tmp_font_dynamic.py --inline-atlas` 會把 .resS 的像素搬進 Texture2D 的 image data 並清空 m_StreamData（變體 H，.assets 變大 32 MB）。
    **變體 H 實機通過（2026-09-11 23:30）**：戶／溫／另 正常顯示，遊戲穩定。`agt package` 現在會自動跑這一步（profile `patch.tmp_dynamic_font`）。
    OTF 本身沒有的字（嗯 等 48 個）用 `projects/<game>/charset_map.json` 替字（fix_text 自動套用）。
+   可重用：`charsets/NotoSansJP-Regular.txt`（內嵌 OTF 的 16,734 字字元集）與 `charsets/NotoSansJP-Regular.map.json`（已驗證的替字表），
+   下一款同字型的遊戲直接複製到 `projects/<game>/font_charset.txt`、`charset_map.json`。
    備案 G（未用到）：清空 glyph／character 表、圖集換成 1×1 內嵌佔位，讓 TMP 走「width<=1 → Reinitialize + ResetAtlasTexture」全動態路徑。
 1. `str.lstrip()` 不會去掉 BOM `﻿` → 判斷 JSON 開頭要先剝 BOM（一開始 0 張表被認出來）。
 2. 浮點數字面（見上）→ 15 張表有 1 張 dump 不一致，靠 `FloatText` 解決。

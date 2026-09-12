@@ -134,7 +134,8 @@ projects/<game>/    每款遊戲的工作目錄（不進 git）：original/ extr
 - 改導出規則前先備份 `exported/script.json`；重新導出後用 `export GAME --merge PREV.json` 接續譯文（以 `(source_file, location)` 對應）。
 - 檢查點 `.agt_checkpoint.json` 以 `(source_file, location)` 為鍵；看到舊式 `.script_checkpoint.json`（位置序號）一律刪掉再跑，它曾靜默錯位 545 條。
 - 不把 GB 級遊戲資料放進 repo；`projects/` 整個不進 git；`.venv*` 也不進 git（用 `setup_env.sh` 重建）。
-- A/B 變體放 `projects/<game>/variants/<字母>/`，每個變體只差一件事，並在 `HANDOFF.md` 記下差異與回報結果。
+- A/B 變體放 `projects/<game>/variants/<字母>/`，每個變體只差一件事，差異與回報結果記在 `projects/<game>/HANDOFF.md`。
+- `HANDOFF.md` 是**跨對話交接用**（context 不夠、要換新對話時寫），專案完結、教訓回寫 `NOTES.md`／`docs/lessons-learned.md` 後就刪除；它不進 git。
 - 不 `git push`、不設 remote，除非使用者明說。
 
 ## 11. 收尾回寫
@@ -142,6 +143,7 @@ projects/<game>/    每款遊戲的工作目錄（不進 git）：original/ extr
 - `engines/<x>/NOTES.md` 固定標題：辨識特徵／資料格式／絕不導出／控制碼／補丁步驟／踩過的坑／實機驗收。
 - 跨引擎的教訓寫 `docs/lessons-learned.md`；使用者偏好（字型、流程）寫 memory。
 - 使用者常說「把採到的坑紀錄一下」——這不是可選項。
+- 專案完結：確認 `HANDOFF.md` 的結論都已搬進 NOTES／docs，可重用的資料（規則檔、字型字元集、替字表）搬進 `engines/<x>/`，再刪 HANDOFF。
 
 ## 12. 風格
 
