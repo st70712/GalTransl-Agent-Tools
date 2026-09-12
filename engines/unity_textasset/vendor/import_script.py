@@ -278,10 +278,7 @@ def _verify_container(rel: str, a, b, rules: Rules, data_dir: Path, errors: list
 
 def _verify_mb(label: str, m1, m2, rules: Rules, errors: list[str], warns: list[str]) -> None:
     allowed = [(r.regex(), r) for r in rules.monobehaviours.get(m1.cls, []) if not r.skip]
-    diffs = tree_diff(m1.tree, m2.tree)
-    if len(diffs) > 2000:
-        errors.append(f"{label}#{m1.path_id} {m1.cls}: 差異超過 2000 處（結構整個變了？）")
-        return
+    diffs = tree_diff(m1.tree, m2.tree)   # 結構（鍵集合／陣列長度）壞掉時 tree_diff 只回一筆，下面會判成不在規則內；葉節點差異數不設上限（RJ01657316 合法差異 2774 條）
     for loc, v1, v2 in diffs:
         rules_here = [r for rx, r in allowed if rx.match(loc)]
         if not rules_here or not isinstance(v1, str) or not isinstance(v2, str):
