@@ -1,15 +1,16 @@
 ---
 name: start-translator
-description: 要跑翻譯但本機 Sakura 模型伺服器沒起來（translate.py 回報 /health 失敗）時，啟動並確認 llama-server。
+description: 要跑翻譯但本機 Sakura 模型伺服器沒起來（translate.py 回報 /health 失敗）時，啟動並確認 llama-server；翻譯端（dgxluna）限定。
 ---
 
 # /start-translator
 
 ## 觸發
 `tools/translate.py` 印出「llama-server 未啟動」、`curl http://127.0.0.1:8080/health` 失敗，或使用者說模型關掉了。
+**只有翻譯端（dgxluna）能跑**；實機端沒有模型，翻譯要 `/handoff` 交過去。
 
 ## 輸入
-- 無；預設值在 `config.yaml`（`llama_server_bin`、`model_gguf`、`endpoint`、`llama_ctx`、`llama_np`、`llama_gpu`）。
+- 無；預設值在 `config.yaml`（`llama_server_bin`、`model_gguf`、`endpoint`、`llama_ctx`、`llama_np`、`llama_gpu`），`config.local.yaml` 可覆蓋。
 
 ## 步驟
 ```bash
