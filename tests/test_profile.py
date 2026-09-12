@@ -10,6 +10,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
+from core import fsutil  # noqa: E402
 from core.profile import list_profiles, load_profile  # noqa: E402
 
 WOLF_VENDOR = REPO / "engines" / "wolf_rpg" / "vendor"
@@ -64,7 +65,7 @@ class ProfileLoading(unittest.TestCase):
         unity = load_profile("unity_textasset")
         self.assertEqual(unity.python_env.get("venv"), ".venv-unity")
         self.assertTrue((unity.engine_dir / unity.python_env.get("requirements", "requirements.txt")).exists())
-        self.assertTrue(str(unity.venv_python()).endswith(".venv-unity/bin/python"))
+        self.assertEqual(unity.venv_python(), fsutil.venv_python(REPO / ".venv-unity"))
         self.assertIsNone(load_profile("wolf_rpg").venv_python())
 
 

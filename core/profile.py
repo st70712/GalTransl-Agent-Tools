@@ -124,8 +124,8 @@ class EngineProfile:
         venv = (self.python_env or {}).get("venv")
         if not venv:
             return None
-        from . import REPO_ROOT
-        return REPO_ROOT / venv / "bin" / "python"
+        from . import REPO_ROOT, fsutil
+        return fsutil.venv_python(REPO_ROOT / venv)
 
 
 def _strip_doc(obj: Any) -> Any:

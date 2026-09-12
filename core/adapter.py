@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import os
 import shlex
 import shutil
 import subprocess
@@ -21,6 +22,11 @@ from typing import Any
 from . import PROJECTS_DIR, config, script_json, state
 from .profile import EngineProfile, load_profile
 from .roundtrip import compare_trees
+
+
+def _cmdline(cmd: list[str]) -> str:
+    """印給人複製的命令列：Windows 用 cmd 風格引號，其他平台用 POSIX。"""
+    return subprocess.list2cmdline(cmd) if os.name == "nt" else shlex.join(cmd)
 
 
 @dataclass
@@ -114,7 +120,7 @@ class StepResult:
 
     @property
     def cmdline(self) -> str:
-        return shlex.join(self.cmd)
+        return _cmdline(self.cmd)
 
 
 class EngineAdapter(ABC):
@@ -131,7 +137,7 @@ class EngineAdapter(ABC):
         if venv is not None:
             if not venv.exists():
                 raise SystemExit(f"引擎 {self.name} 需要專用環境 {venv.parent.parent.name}，尚未建立：\n"
-                                 f"  bash tools/setup_env.sh {self.name}")
+                                 f"  bash tools/setup_env.sh {self.name}   # Windows 在 Git Bash 跑同一指令（需先 pip install uv）")
             self.python = str(venv)          # profile 宣告了 python_env → 一律用它跑 vendor 腳本
         else:
             self.python = python or config.python_stdlib()
@@ -196,11 +202,15 @@ class EngineAdapter(ABC):
         if logs_dir is not None:
             logs_dir.mkdir(parents=True, exist_ok=True)
             log_path = logs_dir / f"{log_name}-{datetime.now():%Y%m%d-%H%M%S}.log"
-        print(f"$ {shlex.join(cmd)}" + (f"   # cwd={cwd}" if cwd else ""), flush=True)
+        print(f"$ {_cmdline(cmd)}" + (f"   # cwd={cwd}" if cwd else ""), flush=True)
+        # 子行程一律 UTF-8 輸出（Windows 主控台預設 cp950，vendored 腳本印日文／中文會炸）
+        child_env = {**os.environ, **(env or {})}
+        child_env.setdefault("PYTHONUTF8", "1")
+        child_env.setdefault("PYTHONIOENCODING", "utf-8")
         lines: list[str] = []
         with (log_path.open("w", encoding="utf-8") if log_path else _NullFile()) as log:
-            log.write(f"$ {shlex.join(cmd)}\n")
-            proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE,
+            log.write(f"$ {_cmdline(cmd)}\n")
+            proc = subprocess.Popen(cmd, cwd=cwd, env=child_env, stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT, text=True, encoding="utf-8",
                                     errors="replace")
             assert proc.stdout is not None

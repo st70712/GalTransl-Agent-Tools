@@ -7,7 +7,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from core import script_json
+from core import fsutil, script_json
 from core.adapter import EngineMatch, Project, StandardCliAdapter, StepResult
 from core.install_notes import build_fields
 from core.install_notes import write as write_install_notes
@@ -65,12 +65,7 @@ class RpgMakerAdapter(StandardCliAdapter):
         found = _find_game_root(root, max_depth=1)
         if not found:
             return StepResult(ok=False, summary=f"{root} 底下找不到 www/data/System.json 或 data/System.json")
-        if p.extracted.is_symlink() or p.extracted.exists():
-            if p.extracted.is_symlink():
-                p.extracted.unlink()
-            else:
-                shutil.rmtree(p.extracted)
-        p.extracted.symlink_to(root)
+        fsutil.replace_dir_with_link(root, p.extracted, rmtree_ok=True)
         n = len(list((root / found[1]).glob("*.json")))
         summary = f"extracted → {root}（{found[1]}，{n} 個 JSON）"
         print(summary)

@@ -12,7 +12,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from core import script_json
+from core import fsutil, script_json
 from core.adapter import EngineMatch, Project, StandardCliAdapter, StepResult
 from core.install_notes import build_fields
 from core.install_notes import write as write_install_notes
@@ -111,12 +111,7 @@ class UnityTextAssetAdapter(StandardCliAdapter):
 
     def prepare(self, p: Project, m: EngineMatch) -> StepResult:
         root = Path(m.extra.get("game_root") or p.original).resolve()
-        if p.extracted.is_symlink() or p.extracted.exists():
-            if p.extracted.is_symlink():
-                p.extracted.unlink()
-            else:
-                shutil.rmtree(p.extracted)
-        p.extracted.symlink_to(root)
+        fsutil.replace_dir_with_link(root, p.extracted, rmtree_ok=True)
         r = self.run([self.python, self.vendor("inspect_assets.py"), root], log_name="inspect", logs_dir=p.logs)
         if r.ok:
             r.summary = f"extracted → {root}；量測見 {r.log_path}"

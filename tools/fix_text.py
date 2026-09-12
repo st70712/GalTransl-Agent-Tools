@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """翻譯後整理（母本 GalTransl-sister/fix_cp950.py，改為 profile 驅動）。
 
-    PY_NLLB=/raid/home/jimhsieh/miniconda3/envs/nllb-env/bin/python
-    $PY_NLLB tools/fix_text.py projects/<game>/exported/script.json [--engine X] [--target-encoding cp950]
-    python  tools/fix_text.py script.json --no-opencc --dry-run        # 純標準庫也能跑（不做簡繁轉換）
+    # $PYT = 有 opencc 的直譯器（見 CLAUDE.md §3／`agt env`）
+    $PYT tools/fix_text.py projects/<game>/exported/script.json [--engine X] [--target-encoding cp950]
+    python tools/fix_text.py script.json --no-opencc --dry-run        # 純標準庫也能跑（不做簡繁轉換）
 
 步驟：
 1. 簡繁正規化（opencc s2twp，控制碼先遮蔽進私用區再轉）
@@ -31,7 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core import codes, script_json, state  # noqa: E402
+from core import codes, fsutil, script_json, state  # noqa: E402
 from core.profile import EngineProfile, load_profile  # noqa: E402
 
 _PLACEHOLDER_BASE = 0xE000   # 私用區，opencc 不會動到
@@ -80,6 +80,7 @@ def resolve_profile(script: Path, engine: str | None) -> tuple[EngineProfile, di
 
 
 def main(argv: list[str] | None = None) -> int:
+    fsutil.utf8_stdio()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("script", type=Path)
     ap.add_argument("-o", "--output", type=Path, help="輸出檔（預設覆蓋原檔）")
