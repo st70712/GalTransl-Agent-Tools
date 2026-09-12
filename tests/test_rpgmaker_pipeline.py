@@ -16,6 +16,7 @@ from core import fsutil, registry, script_json, state  # noqa: E402
 from core.adapter import Project  # noqa: E402
 
 DEMO = REPO / "engines" / "rpgmaker_mv_mz" / "vendor" / "Game"
+fsutil.utf8_stdio()  # Windows 主控台 cp950：adapter 印 ✓／中文不能炸
 
 
 class RpgMakerPipeline(unittest.TestCase):

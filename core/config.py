@@ -2,7 +2,7 @@
 
 三層疊加：``DEFAULTS`` ← ``config.yaml``（進 git，這台開發機的路徑）← ``config.local.yaml``（不進 git，每台機器自己的
 ``site``／``handoff_dir``／直譯器路徑；Windows 可用正斜線）← 環境變數（``GALTRANSL_ROOT`` → ``galtransl_root``；
-``AGT_<KEY大寫>`` → ``<key>``）。設定檔只有一層 ``key: value``，刻意不依賴 pyyaml。
+``AGT_<KEY大寫>`` → ``<key>``，設成空字串也會覆蓋，可用來暫時清掉設定檔的值）。設定檔只有一層 ``key: value``，刻意不依賴 pyyaml。
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ def load_config(path: Path | None = None, local_path: Path | None = None) -> dic
         cfg["galtransl_root"] = os.environ["GALTRANSL_ROOT"]
     for key in list(cfg):
         env = os.environ.get(f"AGT_{key.upper()}")
-        if env:
+        if env is not None:  # 設成空字串也算覆蓋：AGT_HANDOFF_DIR="" 可暫時關掉 config.local.yaml 的 handoff_dir
             cfg[key] = env
     for key, value in cfg.items():
         if value.startswith("~"):

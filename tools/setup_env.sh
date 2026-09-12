@@ -50,6 +50,16 @@ fi
 
 export PATH="$HOME/.local/bin:${LOCALAPPDATA:-}/Programs/uv:${APPDATA:-}/Python/Scripts:$PATH"
 if ! command -v uv >/dev/null 2>&1; then
+  # pip install uv 會把 uv.exe 裝進該 Python 的 Scripts（Store 版 Python 是 …/LocalCache/local-packages/Python311/Scripts，
+  # 不在 PATH）；pip 套件 uv 自帶 find_uv_bin()，問它最準
+  UV_BIN="$("$PYTHON" -c 'import uv; print(uv.find_uv_bin())' 2>/dev/null || true)"
+  if [[ -n "$UV_BIN" ]]; then
+    command -v cygpath >/dev/null 2>&1 && UV_BIN="$(cygpath -u "$UV_BIN")"
+    export PATH="$(dirname "$UV_BIN"):$PATH"
+    echo "uv 不在 PATH，改用 $UV_BIN"
+  fi
+fi
+if ! command -v uv >/dev/null 2>&1; then
   if [[ "$WIN" == 1 ]]; then
     echo "找不到 uv。Windows 請先安裝：pip install uv   （或 winget install astral-sh.uv），再重跑本腳本" >&2; exit 2
   fi

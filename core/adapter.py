@@ -218,7 +218,7 @@ class EngineAdapter(ABC):
                 lines.append(line)
                 log.write(line)
                 if not quiet:
-                    sys.stdout.write(line)
+                    _safe_write(line)
             rc = proc.wait()
         output = "".join(lines)
         non_empty = [ln.strip() for ln in lines if ln.strip()]
@@ -250,6 +250,15 @@ class EngineAdapter(ABC):
             "string_count": len(data["strings"]),
         }
         return script_json.save_sidecar(script, payload)
+
+
+def _safe_write(text: str) -> None:
+    """寫到 stdout；主控台不是 UTF-8（Windows 未設 PYTHONUTF8 時是 cp950）就把編不出的字換成 ?，不中斷流程。"""
+    try:
+        sys.stdout.write(text)
+    except UnicodeEncodeError:
+        enc = sys.stdout.encoding or "utf-8"
+        sys.stdout.write(text.encode(enc, "replace").decode(enc, "replace"))
 
 
 class _NullFile:

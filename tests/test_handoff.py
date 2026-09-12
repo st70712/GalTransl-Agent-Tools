@@ -16,10 +16,12 @@ from unittest import mock
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from core import handoff, script_json, state  # noqa: E402
+from core import fsutil, handoff, script_json, state  # noqa: E402
 from core.adapter import Project  # noqa: E402
 
+fsutil.utf8_stdio()  # Windows 主控台 cp950：adapter 印 ✓／中文不能炸
 PY = sys.executable
+UTF8 = {"text": True, "encoding": "utf-8", "errors": "replace"}  # 子行程輸出一律 UTF-8 解碼
 DEMO = REPO / "engines" / "rpgmaker_mv_mz" / "vendor" / "Game"
 EXPORT = REPO / "engines" / "rpgmaker_mv_mz" / "vendor" / "export_script.py"
 
@@ -29,7 +31,8 @@ def _make_project(root: Path, name: str) -> Project:
     p = Project(root / name)
     p.ensure_dirs()
     shutil.copytree(DEMO, p.original)
-    r = subprocess.run([PY, str(EXPORT), str(DEMO), "-o", str(p.exported)], capture_output=True, text=True)
+    r = subprocess.run([PY, str(EXPORT), str(DEMO), "-o", str(p.exported)], capture_output=True,
+                       env={**os.environ, "PYTHONUTF8": "1"}, **UTF8)
     assert r.returncode == 0, r.stdout + r.stderr
     script_json.save_sidecar(p.script, {"engine": "rpgmaker_mv_mz", "variant": "MV",
                                         "source_encoding": "utf-8", "target_encoding": "utf-8"})
@@ -224,8 +227,8 @@ class AgtCli(unittest.TestCase):
         code = (f"import sys; sys.path.insert(0, {str(REPO)!r}); import core; from pathlib import Path; "
                 f"core.PROJECTS_DIR = Path({str(self.tmp / 'tr')!r}); import core.adapter as A; "
                 f"A.PROJECTS_DIR = core.PROJECTS_DIR; import agt; sys.exit(agt.main({list(args)!r}))")
-        env = {**os.environ, "AGT_SITE": "translator", "AGT_HANDOFF_DIR": ""}
-        return subprocess.run([PY, "-c", code], capture_output=True, text=True, cwd=REPO, env=env)
+        env = {**os.environ, "AGT_SITE": "translator", "AGT_HANDOFF_DIR": "", "PYTHONUTF8": "1"}
+        return subprocess.run([PY, "-c", code], capture_output=True, cwd=REPO, env=env, **UTF8)
 
     def test_detect_bundle(self):
         r = self._agt("detect", str(self.bundle))

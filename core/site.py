@@ -14,6 +14,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import sysconfig
 import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -63,6 +64,35 @@ def _symlink_ok() -> bool:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def find_uv() -> str | None:
+    """uv 執行檔：先看 PATH；沒有就問 pip 套件 uv（``pip install uv`` 在 Store 版 Python 會裝進
+    ``…/LocalCache/local-packages/Python311/Scripts``，不在 PATH），再退回各 Scripts 目錄。"""
+    uv = shutil.which("uv")
+    if uv:
+        return uv
+    try:
+        import uv as _uv  # type: ignore[import-not-found]
+        return str(_uv.find_uv_bin())
+    except Exception:
+        pass
+    exe = "uv.exe" if os.name == "nt" else "uv"
+    dirs = [sysconfig.get_path("scripts")]
+    if os.name == "nt":
+        dirs.append(sysconfig.get_path("scripts", "nt_user"))
+    dirs += [str(Path.home() / ".local" / "bin"), str(Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "uv")]
+    for d in dirs:
+        if d and (Path(d) / exe).is_file():
+            return str(Path(d) / exe)
+    return None
+
+
+def _system_label() -> str:
+    if os.name == "nt":
+        build = sys.getwindowsversion().build  # platform.release() 在 Windows 11 仍印 10
+        return f"Windows {'11' if build >= 22000 else platform.release()} (build {build})"
+    return f"{platform.system()} {platform.release()}"
+
+
 def git_head() -> str | None:
     try:
         r = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True)
@@ -86,9 +116,11 @@ def probe() -> SiteReport:
     caps["python_nllb_ok"] = Path(cfg["python_nllb"]).exists()
     details["python_nllb"] = cfg["python_nllb"]
     caps["can_run_game"] = os.name == "nt"
-    uv = shutil.which("uv")
+    uv = find_uv()
     caps["uv"] = uv is not None
     details["uv"] = uv or "（找不到；Windows: pip install uv）"
+    if uv and shutil.which("uv") is None:
+        details["uv"] += "   （不在 PATH；setup_env.sh 會自己找到）"
     caps["symlink_ok"] = _symlink_ok()
     hd = cfg.get("handoff_dir", "")
     caps["handoff_dir_set"] = bool(hd)
@@ -119,7 +151,7 @@ def probe() -> SiteReport:
     else:
         recommended = "unknown"
     return SiteReport(
-        host=socket.gethostname(), system=f"{platform.system()} {platform.release()}",
+        host=socket.gethostname(), system=_system_label(),
         python=f"{platform.python_version()} ({sys.executable})",
         config_files=[str(p) for p in config.config_sources()],
         site_configured=configured, site_recommended=recommended,
