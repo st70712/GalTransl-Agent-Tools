@@ -36,7 +36,7 @@ BUNDLE_RE = re.compile(r"^(?P<game>.+)-(?P<seq>\d{3})-to-(?P<to>[a-z]+)-(?P<ts>\
 GAME_MARKERS = (
     ("Data.wolf", "WOLF RPG 2.x"), ("Data/BasicData.wolf", "WOLF RPG 3.x"),
     ("www/data/System.json", "RPG Maker MV"), ("data/System.json", "RPG Maker MZ"),
-    ("_Data/globalgamemanagers", "Unity"), ("Game.rgss3a", "RPG Maker VX Ace"),
+    ("_Data/globalgamemanagers", "Unity"), ("_Data/data.unity3d", "Unity（單檔 bundle）"), ("Game.rgss3a", "RPG Maker VX Ace"),
 )
 
 
