@@ -189,7 +189,8 @@ class UnityTextAssetAdapter(StandardCliAdapter):
                 return StepResult(ok=True, summary=f"font_inject：找不到 {font}，跳過（缺字對策未套用）")
             data_dir = self.data_dir(p.extracted)
             target = BUNDLE_NAME if container == "bundle" else cfg.get("assets", "resources.assets")
-            base = p.translated / Path(data_dir).name / target
+            real_data_dir = self._data_dir(p)   # data_dir() 回的是 extracted/ 本身，名字不是 *_Data
+            base = p.translated / (real_data_dir.name if real_data_dir else Path(data_dir).name) / target
             cmd = [self.python, self.vendor("inject_font.py"), data_dir, "-o", p.translated, "--font", font,
                    "--into", cfg.get("into", "LiberationSans"), *cfg.get("args", [])]
             if base.exists():
