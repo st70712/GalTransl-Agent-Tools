@@ -28,3 +28,6 @@ __pycache__/
 *.zip
 *.7z
 *.rar
+
+# 每台機器自己的設定（site、handoff_dir、直譯器路徑）
+config.local.yaml

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import os
 import shlex
 import shutil
 import subprocess
@@ -21,6 +22,18 @@ from typing import Any
 from . import PROJECTS_DIR, config, script_json, state
 from .profile import EngineProfile, load_profile
 from .roundtrip import compare_trees
+
+
+def format_cmdline(cmd: list[str]) -> str:
+    """印給人複製的命令列：Windows 用 cmd 風格引號（含反斜線的參數一律加雙引號，貼回 Git Bash 反斜線才不會被吃掉；
+    cmd／PowerShell 也接受），其他平台用 POSIX。"""
+    if os.name != "nt":
+        return shlex.join(cmd)
+    return " ".join(subprocess.list2cmdline([c]) if not _needs_quote(c) else f'"{c}"' for c in cmd)
+
+
+def _needs_quote(arg: str) -> bool:
+    return ("\\" in arg or " " in arg) and '"' not in arg
 
 
 @dataclass
@@ -114,7 +127,7 @@ class StepResult:
 
     @property
     def cmdline(self) -> str:
-        return shlex.join(self.cmd)
+        return format_cmdline(self.cmd)
 
 
 class EngineAdapter(ABC):
@@ -131,7 +144,7 @@ class EngineAdapter(ABC):
         if venv is not None:
             if not venv.exists():
                 raise SystemExit(f"引擎 {self.name} 需要專用環境 {venv.parent.parent.name}，尚未建立：\n"
-                                 f"  bash tools/setup_env.sh {self.name}")
+                                 f"  bash tools/setup_env.sh {self.name}   # Windows 在 Git Bash 跑同一指令（需先 pip install uv）")
             self.python = str(venv)          # profile 宣告了 python_env → 一律用它跑 vendor 腳本
         else:
             self.python = python or config.python_stdlib()
@@ -196,11 +209,15 @@ class EngineAdapter(ABC):
         if logs_dir is not None:
             logs_dir.mkdir(parents=True, exist_ok=True)
             log_path = logs_dir / f"{log_name}-{datetime.now():%Y%m%d-%H%M%S}.log"
-        print(f"$ {shlex.join(cmd)}" + (f"   # cwd={cwd}" if cwd else ""), flush=True)
+        print(f"$ {format_cmdline(cmd)}" + (f"   # cwd={cwd}" if cwd else ""), flush=True)
+        # 子行程一律 UTF-8 輸出（Windows 主控台預設 cp950，vendored 腳本印日文／中文會炸）
+        child_env = {**os.environ, **(env or {})}
+        child_env.setdefault("PYTHONUTF8", "1")
+        child_env.setdefault("PYTHONIOENCODING", "utf-8")
         lines: list[str] = []
-        with (log_path.open("w", encoding="utf-8") if log_path else _NullFile()) as log:
-            log.write(f"$ {shlex.join(cmd)}\n")
-            proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE,
+        with (log_path.open("w", encoding="utf-8", newline="\n") if log_path else _NullFile()) as log:
+            log.write(f"$ {format_cmdline(cmd)}\n")
+            proc = subprocess.Popen(cmd, cwd=cwd, env=child_env, stdout=subprocess.PIPE,
                                     stderr=subprocess.STDOUT, text=True, encoding="utf-8",
                                     errors="replace")
             assert proc.stdout is not None
@@ -208,7 +225,7 @@ class EngineAdapter(ABC):
                 lines.append(line)
                 log.write(line)
                 if not quiet:
-                    sys.stdout.write(line)
+                    _safe_write(line)
             rc = proc.wait()
         output = "".join(lines)
         non_empty = [ln.strip() for ln in lines if ln.strip()]
@@ -242,6 +259,15 @@ class EngineAdapter(ABC):
         return script_json.save_sidecar(script, payload)
 
 
+def _safe_write(text: str) -> None:
+    """寫到 stdout；主控台不是 UTF-8（Windows 未設 PYTHONUTF8 時是 cp950）就把編不出的字換成 ?，不中斷流程。"""
+    try:
+        sys.stdout.write(text)
+    except UnicodeEncodeError:
+        enc = sys.stdout.encoding or "utf-8"
+        sys.stdout.write(text.encode(enc, "replace").decode(enc, "replace"))
+
+
 class _NullFile:
     def __enter__(self):
         return self
@@ -271,6 +297,8 @@ class StandardCliAdapter(EngineAdapter):
     import_script = "import_script.py"
     roundtrip_script = "roundtrip_test.py"
     roundtrip_mode = "bytes"                 # bytes | json
+    zero_import_fill = "blank"               # blank | identity：零翻譯導入時 translated 清空、或設成 original
+    zero_import_noop_ok = False              # True：vendored 導入腳本對零譯文刻意不寫檔（G4 由 roundtrip_test.py 涵蓋），不算空轉
 
     def extra_validate_args(self, p: Project, m: EngineMatch | None) -> list[str]:
         return []
@@ -329,7 +357,9 @@ class StandardCliAdapter(EngineAdapter):
         tmp = Path(tempfile.mkdtemp(prefix="agt-zero-", dir=p.root))
         try:
             blank = tmp / "zero.json"
-            script_json.save(script_json.blank_translations(script_json.load(p.script)), blank)
+            fill = (script_json.identity_translations if self.zero_import_fill == "identity"
+                    else script_json.blank_translations)
+            script_json.save(fill(script_json.load(p.script)), blank)
             out = tmp / "out"
             r = self.import_(p, blank, out=out)
             if not r.ok:
@@ -337,8 +367,16 @@ class StandardCliAdapter(EngineAdapter):
                 return r
             d = compare_trees(self.data_dir(p.extracted), self.data_dir(out), mode=self.roundtrip_mode)
             summary = d.summary("extracted", "zero-import")
+            ok = d.ok
+            if not d.same and not d.different:  # 導入什麼都沒寫出來 → 沒比到任何檔案
+                if self.zero_import_noop_ok:
+                    summary = "零翻譯導入不寫檔（轉接器宣告為正常，往返由 roundtrip_test.py 涵蓋）；" + summary
+                else:
+                    ok = False
+                    summary = ("零翻譯導入沒有產生任何檔案，比對空轉（vendored 導入腳本可能會略過沒有譯文的檔案："
+                               "轉接器改 zero_import_fill = \"identity\" 或宣告 zero_import_noop_ok）\n" + summary)
             print(summary)
-            return StepResult(ok=d.ok, cmd=r.cmd, returncode=0 if d.ok else 1,
+            return StepResult(ok=ok, cmd=r.cmd, returncode=0 if ok else 1,
                               log_path=r.log_path, summary=summary, output=r.output)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)

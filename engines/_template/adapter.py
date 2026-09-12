@@ -50,8 +50,9 @@ class TemplateAdapter(StandardCliAdapter):
 
     def prepare(self, p: Project, m: EngineMatch) -> StepResult:
         """解包／定位資料樹到 p.extracted。原始遊戲在 p.original，任何步驟不得寫入。"""
-        # TODO: 二進位封包 → 呼叫 vendor 的解包腳本；純檔案 → symlink 即可：
-        #   p.extracted.symlink_to(Path(m.extra["game_root"]).resolve())
+        # TODO: 二進位封包 → 呼叫 vendor 的解包腳本；純檔案 → 連結即可（symlink，Windows 沒權限時退回 junction）：
+        #   from core import fsutil
+        #   fsutil.replace_dir_with_link(Path(m.extra["game_root"]).resolve(), p.extracted, rmtree_ok=True)
         return StepResult(ok=False, summary="TODO: prepare 尚未實作")
 
     def breakage_test(self, p: Project) -> StepResult:

@@ -4,10 +4,10 @@
 母本是 GalTransl-sister/translate_wolf.py；引擎相關的常數（context 優先級／預設跳過、控制碼正則）
 全部改讀 engines/<engine>/profile.json，所以同一支程式可以翻任何引擎導出的 script.json。
 
-    PY_NLLB=/raid/home/jimhsieh/miniconda3/envs/nllb-env/bin/python
-    $PY_NLLB tools/translate.py -i projects/<game>/exported/script.json --dry-run          # 只看統計，不連線
-    $PY_NLLB tools/translate.py -i projects/<game>/exported/script.json --limit 20         # smoke build 用
-    $PY_NLLB tools/translate.py -i projects/<game>/exported/script.json                    # 大量翻譯（需 user_boot_ok）
+    # $PYT = 有 openai/httpx 的直譯器（見 CLAUDE.md §3／`agt env`）；--dry-run 純標準庫即可，在任何站點都能跑
+    $PYT tools/translate.py -i projects/<game>/exported/script.json --dry-run          # 只看統計，不連線
+    $PYT tools/translate.py -i projects/<game>/exported/script.json --limit 20         # smoke build 用（翻譯端）
+    $PYT tools/translate.py -i projects/<game>/exported/script.json                    # 大量翻譯（需 user_boot_ok）
 
 與 translate_wolf.py 的差異：
 * 檢查點 .agt_checkpoint.json 以 (source_file, location) 為鍵並記錄原文，重新導出後不會錯位；
@@ -36,7 +36,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from core import codes, config, jp, script_json, state  # noqa: E402
+from core import codes, config, fsutil, jp, script_json, state  # noqa: E402
 from core.profile import EngineProfile, load_profile  # noqa: E402
 
 CHECKPOINT_NAME = ".agt_checkpoint.json"
@@ -495,6 +495,7 @@ def find_project_state(script: Path) -> Path | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    fsutil.utf8_stdio()
     cfg = config.load_config()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-i", "--input", required=True, type=Path, help="script.json")

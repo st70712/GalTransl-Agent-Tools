@@ -55,6 +55,11 @@ JSON 類引擎可以沒有這支，`StandardCliAdapter.roundtrip()` 會改用零
 `vendor/import_script.py import DATA SCRIPT -o OUT [-e ENC]`。把 `translated` 全清空導入，輸出必須與原資料相同（`agt gates` 會做）。
 導入要：只寫 `translated` 非空的；原文對不上就拒絕（stale）；只列出實際變動的檔案。
 
+**注意關卡空轉**：導入腳本「略過沒有譯文的檔案」時，空譯文導入一個檔案都不寫，比對集合是空的，關卡會假綠（RPG Maker 就這樣，
+2026-09-12 在 Windows 驗收才發現）。`StandardCliAdapter.zero_import` 現在比不到任何檔案就判失敗；轉接器二選一：
+`zero_import_fill = "identity"`（譯文＝原文，讓每個有字串的檔案都被重寫再比對；RPG Maker 用這個），或
+`zero_import_noop_ok = True`（導入腳本對零譯文與譯文＝原文都刻意不寫檔，往返由 `vendor/roundtrip_test.py` 涵蓋；Unity 用這個）。
+
 ## 6. verify + 破壞攔截
 
 `vendor/import_script.py verify DATA OUT`：比對「不該變的東西」——指令數／ID／縮排／整數參數、標籤、檔名、選項數、地圖尺寸、資料庫數值欄位。

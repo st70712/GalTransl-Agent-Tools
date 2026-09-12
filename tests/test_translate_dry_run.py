@@ -18,10 +18,11 @@ EXPORT = REPO / "engines" / "rpgmaker_mv_mz" / "vendor" / "export_script.py"
 
 
 def run(*args: str, env: dict | None = None) -> subprocess.CompletedProcess:
-    e = dict(os.environ)
+    e = {**os.environ, "PYTHONUTF8": "1"}  # 子行程與解碼都走 UTF-8（Windows 主控台預設 cp950）
     if env:
         e.update(env)
-    return subprocess.run([PY, *args], capture_output=True, text=True, env=e, cwd=REPO)
+    return subprocess.run([PY, *args], capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          env=e, cwd=REPO)
 
 
 class ToolsStdlib(unittest.TestCase):

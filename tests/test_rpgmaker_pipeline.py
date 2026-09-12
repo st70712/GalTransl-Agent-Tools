@@ -12,10 +12,11 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from core import registry, script_json, state  # noqa: E402
+from core import fsutil, registry, script_json, state  # noqa: E402
 from core.adapter import Project  # noqa: E402
 
 DEMO = REPO / "engines" / "rpgmaker_mv_mz" / "vendor" / "Game"
+fsutil.utf8_stdio()  # Windows 主控台 cp950：adapter 印 ✓／中文不能炸
 
 
 class RpgMakerPipeline(unittest.TestCase):
@@ -24,7 +25,7 @@ class RpgMakerPipeline(unittest.TestCase):
         cls.tmp = Path(tempfile.mkdtemp(prefix="agt-test-rpgmaker-"))
         cls.p = Project(cls.tmp / "demo")
         cls.p.ensure_dirs()
-        cls.p.original.symlink_to(DEMO.resolve())
+        fsutil.link_dir(DEMO.resolve(), cls.p.original)
         cls.ad = registry.get("rpgmaker_mv_mz")
         m = cls.ad.detect(cls.p.original)
         assert m is not None and m.variant == "MV", m

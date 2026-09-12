@@ -49,6 +49,27 @@
 - **環境依賴要在第一版就宣告**：UnityPy 一開始是臨時裝的，後來才補 `python_env` + `requirements.txt` + `setup_env.sh`。
   新引擎需要套件時，從一開始就走宣告路線，專案才搬得到別的機器。
 
+## 兩站接力（實機端 Windows ↔ 翻譯端 dgxluna，2026-09-12）
+
+- **碰遊戲檔的步驟與碰模型的步驟可以完全分開**：translate／fix_text／check_codes／validate 只讀 `exported/` + sidecar + profile，
+  import 以後才要 `original/`。所以交接包只需要幾 MB；GB 級的遊戲永遠留在筆電。
+- **Windows 的 junction 不被 `Path.is_symlink()` 認得**：symlink 沒權限退回 junction 之後，「is_symlink→unlink，否則 rmtree」的邏輯會把 junction 當實體目錄 rmtree。
+  用 `core/fsutil.is_link`／`remove_link` 統一處理；新 adapter 建連結一律走 `fsutil.replace_dir_with_link`。
+- **venv 直譯器路徑不能寫死 `bin/python`**：Windows 是 `Scripts/python.exe`（`fsutil.venv_python`）。
+- **檢查點必須與 script.json 同行**：fix_text 退回時會修剪 `.agt_checkpoint.json`，translate 續跑時會讀它；分開搬就脫節。交接包兩個一起帶。
+- **兩站的 agt.json 要合併不是覆蓋**：實機端記 import／package／playtest，翻譯端記 translate／fix_text；覆蓋會丟一邊。每關取時間較新的，history 聯集。
+- **交接包要帶 manifest 記專案名**：`agt.json` 沒有 name 欄位，zip 檔名又可能被改；Unity 規則檔靠專案名對應，兩站名字必須一致。
+- **程式碼不會跟著交接包走**：實機端在 G1–G5 改的 adapter／profile／rules 要 commit + push，翻譯端 pull；manifest 記 HEAD，不一致要警告。
+- **主控台編碼**：Windows 預設 cp950，`agt.py` 與 vendored 子行程印日文／中文會炸；入口 `utf8_stdio()` + 子行程 `PYTHONUTF8=1`。
+  測試用 `subprocess.run(text=True)` 讀子行程輸出也要指定 `encoding="utf-8"`，否則依 locale 用 cp950 解碼直接 `UnicodeDecodeError`。
+- **關卡要確認「真的比到東西」**（Windows 驗收 2026-09-12 抓到）：RPG Maker 的零翻譯導入一直是空轉——vendored 匯入略過沒譯文的檔案，
+  `0 個相同、0 個不同` 也判 ✓。安全網本身要有「比對集合非空」的檢查；RPG Maker 改 identity 譯文，Unity 明確宣告 noop 並由 roundtrip_test 涵蓋。
+- **Windows 環境的細節**：Microsoft Store 版 Python 的 `pip install uv` 裝進 `…\LocalCache\local-packages\Python311\Scripts`，不在 PATH
+  （用 `uv.find_uv_bin()` 找）；`platform.release()` 在 Win11 仍印 10；`core.autocrlf=true` 會把 `.sh` 檢出成 CRLF（`.gitattributes` 固定 LF）；
+  `list2cmdline` 印的 `C:\Users\…` 沒引號，貼回 Git Bash 反斜線會被吃掉（含反斜線／空白的參數一律雙引號）。
+- **測試不能碰真實設定**：`mock.patch.dict(os.environ, {"AGT_HANDOFF_DIR": ""})` 原本無效（空字串不覆蓋），測試交接包真的被複製到 Google Drive。
+  環境變數設成空字串現在也算覆蓋。
+
 ## 工具鏈事故
 
 - **檢查點以位置序號為鍵**（GalTransl-Angle，2026-07-15）：導出範圍從 1520 變 1816 條後沒刪 `.script_checkpoint.json`，545 條譯文靜默錯位（`防御バフ_自分` 變「攻擊增益_塞拉」）。

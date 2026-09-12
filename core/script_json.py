@@ -78,6 +78,14 @@ def blank_translations(data: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def identity_translations(data: dict[str, Any]) -> dict[str, Any]:
+    """回傳把所有 translated 設成 original 的深拷貝（往返驗證用：導入後應與原檔相同）。"""
+    out = copy.deepcopy(data)
+    for e in out["strings"]:
+        e["translated"] = e["original"]
+    return out
+
+
 def stats(data: dict[str, Any]) -> dict[str, Any]:
     total = Counter()
     done = Counter()

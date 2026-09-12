@@ -44,7 +44,8 @@
 - **UnityPy 重新序列化的 SerializedFile 不逐位元組相同**（本例 10,407,440 → 10,384,064 bytes；標頭／對齊不同，
   5710 個物件 raw 全部相同）。G2 往返因此定義為「逐物件相同 + 15/15 表重新 dump 與原文相同」，
   遊戲吃不吃要靠 smoke build 實機確認。
-- import 只重寫「有譯文變動」的 asset 檔；零翻譯導入不會產生任何檔案（verify 視為通過）。
+- import 只重寫「有譯文變動」的 asset 檔；零翻譯導入（或譯文＝原文）不會產生任何檔案（verify 視為通過）。
+  轉接器因此宣告 `zero_import_noop_ok = True`，G4 不算空轉；真正的往返由 `vendor/roundtrip_test.py`（逐物件 + 15/15 表 dump）負責。
 
 ## 踩過的坑
 0. **TMP 動態字型化的正確組合**（RJ01483219 實測）：`m_AtlasPopulationMode=1`＋`m_SourceFontFile` 指到內嵌 Font（跨檔要加 external）

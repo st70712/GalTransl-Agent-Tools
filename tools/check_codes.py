@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core import codes, script_json  # noqa: E402
+from core import codes, fsutil, script_json  # noqa: E402
 from core.profile import load_profile  # noqa: E402
 
 
@@ -38,6 +38,7 @@ def resolve_profile(script: Path, engine: str | None):
 
 
 def main(argv: list[str] | None = None) -> int:
+    fsutil.utf8_stdio()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("script", type=Path)
     ap.add_argument("--engine", help="引擎名（預設從 sidecar / info.engine 推斷）")
