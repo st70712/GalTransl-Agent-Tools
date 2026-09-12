@@ -82,7 +82,7 @@ projects/<game>/    每款遊戲的工作目錄（不進 git）：original/ extr
 
 `projects/<game>/`：`original/` 唯讀（symlink／junction；翻譯端骨架專案沒有）；`exported/` 放 `script.json`、`format_specification.json`、
 `.agt.json`（sidecar，記引擎／編碼）、`untranslated.json`、`.agt_checkpoint.json`；`translated/` 每次 import 整個重建；`out/` 是交付物 + `安裝說明.txt`；
-`handoff/` 放交接包 zip；`glossary.txt`（選用）格式 `原文->譯文 // 備註`；`font_charset.txt`／`charset_map.json`（選用）給 fix_text 做缺字檢查；
+`handoff/` 放交接包 zip；`glossary.txt`（選用）格式 `原文->譯文#備註`（**備註符號是 `#` 不是 `//`**，見 `docs/translation-quality.md`）；`font_charset.txt`／`charset_map.json`（選用）給 fix_text 做缺字檢查；
 `HANDOFF.md` 是跨機／跨對話交接備忘（範本 `docs/templates/HANDOFF.template.md`）。
 
 ## 5. 硬性關卡（順序不可調，任一失敗就停）
