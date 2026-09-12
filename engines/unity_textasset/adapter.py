@@ -36,6 +36,7 @@ def _find_root(game_dir: Path, max_depth: int = 2) -> tuple[Path, Path] | None:
 class UnityTextAssetAdapter(StandardCliAdapter):
     name = "unity_textasset"
     roundtrip_mode = "bytes"
+    zero_import_noop_ok = True       # import_script 對零譯文（或譯文＝原文）刻意不寫檔；往返由 vendor/roundtrip_test.py 驗
 
     # -- 偵測 ---------------------------------------------------------------
 

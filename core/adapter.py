@@ -298,6 +298,7 @@ class StandardCliAdapter(EngineAdapter):
     roundtrip_script = "roundtrip_test.py"
     roundtrip_mode = "bytes"                 # bytes | json
     zero_import_fill = "blank"               # blank | identity：零翻譯導入時 translated 清空、或設成 original
+    zero_import_noop_ok = False              # True：vendored 導入腳本對零譯文刻意不寫檔（G4 由 roundtrip_test.py 涵蓋），不算空轉
 
     def extra_validate_args(self, p: Project, m: EngineMatch | None) -> list[str]:
         return []
@@ -367,10 +368,13 @@ class StandardCliAdapter(EngineAdapter):
             d = compare_trees(self.data_dir(p.extracted), self.data_dir(out), mode=self.roundtrip_mode)
             summary = d.summary("extracted", "zero-import")
             ok = d.ok
-            if not d.same and not d.different:  # 導入什麼都沒寫出來 → 沒比到任何檔案，不算過
-                ok = False
-                summary = ("零翻譯導入沒有產生任何檔案，比對空轉（vendored 導入腳本可能會略過沒有譯文的檔案："
-                           "轉接器改 zero_import_fill = \"identity\"）\n" + summary)
+            if not d.same and not d.different:  # 導入什麼都沒寫出來 → 沒比到任何檔案
+                if self.zero_import_noop_ok:
+                    summary = "零翻譯導入不寫檔（轉接器宣告為正常，往返由 roundtrip_test.py 涵蓋）；" + summary
+                else:
+                    ok = False
+                    summary = ("零翻譯導入沒有產生任何檔案，比對空轉（vendored 導入腳本可能會略過沒有譯文的檔案："
+                               "轉接器改 zero_import_fill = \"identity\" 或宣告 zero_import_noop_ok）\n" + summary)
             print(summary)
             return StepResult(ok=ok, cmd=r.cmd, returncode=0 if ok else 1,
                               log_path=r.log_path, summary=summary, output=r.output)
