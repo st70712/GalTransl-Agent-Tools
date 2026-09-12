@@ -5,28 +5,44 @@
 把「必須依序通過的關卡」串成 `agt gates`。每一步都會印出底層 vendored 腳本的完整指令，
 可以直接複製到 shell 重跑。
 
-    PY=/raid/home/jimhsieh/miniconda3/envs/galtransl/bin/python
+    $PY agt.py env                     # 先看這台是實機端還是翻譯端（$PY 見 CLAUDE.md §3）
     $PY agt.py engines
-    $PY agt.py detect <遊戲目錄>
+    $PY agt.py detect <遊戲目錄|交接包.zip|資料夾>   # 來料判斷：遊戲 / 交接包 / 既有專案
     $PY agt.py init <game> --original <遊戲目錄>
     $PY agt.py gates <game>            # prepare → roundtrip → export → zero-import → verify → breakage
+    $PY agt.py handoff pack <game>     # 兩站接力：打包交接包給另一站；unpack 收包
     $PY agt.py status <game>
 """
 
 from __future__ import annotations
 
 import argparse
+import json
+import subprocess
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from core import codes, config, merge, registry, script_json, state  # noqa: E402
+from core import (  # noqa: E402
+    TOOLS_DIR,
+    codes,
+    config,
+    fsutil,
+    handoff,
+    merge,
+    registry,
+    script_json,
+    site,
+    state,
+)
 from core.adapter import EngineAdapter, EngineMatch, Project, StepResult  # noqa: E402
 from core.profile import load_profile  # noqa: E402
 
 GATE_SEQUENCE = ("prepare", "roundtrip", "export", "zero_import", "verify", "breakage")
+# 要碰 original/ 或 extracted/ 的步驟：翻譯端骨架專案（unpack 建的，沒有 original/）不能跑
+NEEDS_GAME = {"prepare", "roundtrip", "export", "zero-import", "import", "verify", "breakage", "package"}
 
 
 # -- 共用 -------------------------------------------------------------------
@@ -43,6 +59,12 @@ def _adapter(p: Project) -> tuple[EngineAdapter, EngineMatch]:
     if m is None:
         sys.exit(f"{p.name} 尚未辨識引擎（agt init 或 agt detect 後用 --engine 指定）")
     return registry.get(m.engine, config.python_stdlib()), m
+
+
+def _require_game(p: Project, step: str) -> None:
+    if not p.original.exists():
+        sys.exit(f"{step} 需要遊戲檔（original/），但 projects/{p.name}/ 沒有——這是翻譯端骨架專案。"
+                 f"此步驟要在實機端跑；翻譯端只做 translate / fix_text / check-codes / validate，做完 agt handoff pack。")
 
 
 def _finish(p: Project, gate: str, r: StepResult) -> int:
@@ -78,6 +100,35 @@ def cmd_engines(_a) -> int:
 
 
 def cmd_detect(a) -> int:
+    intake = handoff.classify(Path(a.dir))
+    if intake.kind == "missing":
+        sys.exit(f"路徑不存在：{intake.path}")
+    if intake.kind in ("bundle_zip", "bundle_dir"):
+        man = intake.manifest or {}
+        print(f"這是交接包：{intake.path}")
+        print(f"  專案 {man.get('game') or '?'}  seq #{man.get('seq', '?')}  "
+              f"{man.get('from_site', '?')} → {man.get('to_site', '?')}  引擎 {man.get('engine') or '?'}  "
+              f"打包於 {man.get('packed_at', '?')} @ {man.get('host', '?')}")
+        print(f"→ $PY agt.py handoff unpack {intake.path}")
+        return 0
+    if intake.kind == "bundle_pool":
+        print(f"這個資料夾裡有 {len(intake.candidates)} 個交接包（新→舊）：")
+        for c in intake.candidates[:10]:
+            print(f"  {c.name}")
+        print(f"→ $PY agt.py handoff unpack {intake.path}   # 自動取寄給本站、seq 最大的那個")
+        return 0
+    if intake.kind == "project_dir":
+        print(f"這是既有專案 projects/{intake.path.name}/ → $PY agt.py status {intake.path.name}")
+        return 0
+    if intake.kind == "game_zip":
+        print(f"這是完整遊戲的壓縮檔（{'; '.join(intake.hints) or '看不出引擎'}）。")
+        print("→ 先解壓到 projects/<game>/original_zip/（日文檔名用 `unzip -O cp932`），再對解開的目錄 agt detect / agt init")
+        return 1
+    if intake.kind == "unknown":
+        print("; ".join(intake.hints))
+        return 1
+    if intake.hints:
+        print("目錄特徵：" + "; ".join(intake.hints))
     matches = registry.detect(Path(a.dir))
     if not matches:
         print("沒有任何引擎認得這個目錄。看 docs/engines.md 的特徵表，可能需要新的轉接器（/new-adapter）。")
@@ -96,15 +147,11 @@ def cmd_init(a) -> int:
     if not original.exists():
         sys.exit(f"原始遊戲目錄不存在：{original}")
     p.ensure_dirs()
-    if p.original.is_symlink() or p.original.exists():
-        if p.original.is_symlink():
-            p.original.unlink()
-        elif not any(p.original.iterdir()):
-            p.original.rmdir()
-        else:
-            sys.exit(f"{p.original} 已存在且非空，不覆蓋")
-    p.original.symlink_to(original)
-    print(f"projects/{a.game}/original → {original}")
+    try:
+        kind = fsutil.replace_dir_with_link(original, p.original, rmtree_ok=False)
+    except (FileExistsError, OSError) as e:
+        sys.exit(str(e))
+    print(f"projects/{a.game}/original → {original}（{kind}）")
     if a.engine:
         cls = registry.load_adapter_class(a.engine)
         m = cls.detect(original) or EngineMatch(engine=a.engine, confidence=1.0, evidence=["使用者指定"])
@@ -129,8 +176,10 @@ def cmd_init(a) -> int:
 
 def cmd_step(a) -> int:
     p = _project(a.game)
-    ad, m = _adapter(p)
     step = a.command
+    if step in NEEDS_GAME:
+        _require_game(p, step)
+    ad, m = _adapter(p)
     if step == "prepare":
         return _finish(p, "prepare", ad.prepare(p, m))
     if step == "roundtrip":
@@ -175,7 +224,11 @@ def cmd_step(a) -> int:
         rc = _finish(p, "package", r)
         if r.ok and not state.gate_ok(p.state_path, "user_boot_ok"):
             state.mark_gate(p.state_path, "smoke_build", True, "package 完成，等使用者實機開啟後 agt mark <game> user_boot_ok")
-            print("→ 這是 smoke build：請把 out/ 交給使用者實機開啟，確認後 `agt mark", p.name, "user_boot_ok`")
+            if site.current_site() == "workstation":
+                print(f"→ 這是 smoke build：照 out/安裝說明.txt 裝進遊戲、`agt playtest {p.name}` 抓崩潰，"
+                      f"請使用者目視後 `agt mark {p.name} user_boot_ok`，再 `agt handoff pack {p.name}` 交回翻譯端")
+            else:
+                print("→ 這是 smoke build：請把 out/ 交給使用者實機開啟，確認後 `agt mark", p.name, "user_boot_ok`")
         return rc
     sys.exit(f"未知步驟 {step}")
 
@@ -193,6 +246,7 @@ def run_check_codes(p: Project, script: Path) -> StepResult:
 
 def cmd_gates(a) -> int:
     p = _project(a.game)
+    _require_game(p, "gates")
     ad, m = _adapter(p)
     runners = {
         "prepare": lambda: ad.prepare(p, m),
@@ -209,8 +263,12 @@ def cmd_gates(a) -> int:
         if rc:
             print(f"\n關卡 {gate} 失敗，停止。修好後重跑 agt gates {a.game}。")
             return rc
-    print("\n前六道關卡全過。下一步：smoke build（tools/translate.py --limit 20 → fix_text → check-codes → import → package），")
-    print("交給使用者實機開啟後 `agt mark <game> user_boot_ok`，才可以大量翻譯。")
+    if site.current_site() == "workstation":
+        print(f"\n前六道關卡全過。實機端下一步：量測寫進 HANDOFF.md（含 smoke 樣本的 --filter）→ commit+push → "
+              f"`agt handoff pack {a.game}` 交給翻譯端翻 20 條。")
+    else:
+        print("\n前六道關卡全過。下一步：smoke build（tools/translate.py --limit 20 → fix_text → check-codes → import → package），")
+        print("交給使用者實機開啟後 `agt mark <game> user_boot_ok`，才可以大量翻譯。")
     print(state.format_state(state.load_state(p.state_path)))
     return 0
 
@@ -246,6 +304,70 @@ def cmd_status(a) -> int:
     return 0
 
 
+def cmd_env(a) -> int:
+    r = site.probe()
+    if a.json:
+        print(json.dumps(r.to_dict(), ensure_ascii=False, indent=2))
+    else:
+        print(site.format_report(r))
+    return 0
+
+
+def cmd_handoff(a) -> int:
+    here = site.current_site()
+    if a.action == "pack":
+        p = _project(a.game)
+        to = a.to or site.other_site(here)
+        if to is None:
+            sys.exit("無法推斷要交給哪一站：請加 --to translator|workstation（或在 config.local.yaml 設 site）")
+        try:
+            r = handoff.pack(p, to, from_site=here, out_dir=Path(a.out) if a.out else None,
+                             include_logs=not a.no_logs, allow_dirty=a.allow_dirty)
+        except handoff.HandoffError as e:
+            sys.exit(f"✗ {e}")
+        print(f"✓ 交接包 #{r.seq} → {to}：{r.bundle}（{len(r.files)} 個檔案）")
+        if r.copied_to:
+            print(f"  已複製到共用資料夾：{r.copied_to}")
+            print("  （rclone／Drive 桌面版可能延遲上傳；交給使用者前 ls -la 確認大小一致）")
+        else:
+            print("  沒有 handoff_dir：請把這個 zip 交給使用者搬到另一站（或放 config.local.yaml 的 handoff_dir）")
+        for w in r.warnings:
+            print(f"  ! {w}")
+        print(f"→ 持棒方現在是 {to}：收到回傳包前，本站不要再改 exported/script.json")
+        return 0
+    # unpack
+    try:
+        r = handoff.unpack(Path(a.src), game=a.game, force=a.force, site=here if here in site.SITES else None)
+    except handoff.HandoffError as e:
+        sys.exit(f"✗ {e}")
+    p = r.project
+    print(f"✓ 收到交接包 #{r.seq} → projects/{p.name}/（{'新建' if r.created else '更新'}，寫入 {len(r.files)} 個檔案）")
+    for b in r.backups:
+        print(f"  備份：{b}")
+    for w in r.warnings:
+        print(f"  ! {w}")
+    print(state.format_state(state.load_state(p.state_path)))
+    if (p.root / "HANDOFF.md").exists():
+        print(f"→ 先讀 projects/{p.name}/HANDOFF.md 的最新一段「請對方做」")
+    if here == "translator":
+        print(f"→ 翻譯端：$PYT tools/translate.py -i {p.script} [--limit 20 --filter …] → fix_text → check-codes → validate → agt handoff pack {p.name}")
+    elif here == "workstation":
+        print(f"→ 實機端：agt import {p.name} → verify → package → 裝進遊戲 → agt playtest {p.name} → 使用者目視 → mark → handoff pack")
+    return 0
+
+
+def cmd_playtest(a) -> int:
+    cmd = [sys.executable, str(TOOLS_DIR / "playtest.py"), a.game]
+    if a.exe:
+        cmd += ["--exe", a.exe]
+    cmd += ["--wait", str(a.wait)]
+    if a.kill:
+        cmd.append("--kill")
+    if a.dry_run:
+        cmd.append("--dry-run")
+    return subprocess.call(cmd)
+
+
 # -- 入口 -------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -254,13 +376,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("engines", help="列出已接入的引擎").set_defaults(func=cmd_engines)
 
-    s = sub.add_parser("detect", help="辨識遊戲目錄的引擎")
-    s.add_argument("dir")
+    s = sub.add_parser("env", help="這台機器是哪一站（實機端／翻譯端）、有哪些能力")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_env)
+
+    s = sub.add_parser("detect", help="來料判斷：遊戲目錄→辨識引擎；交接包→提示 unpack；遊戲 zip→提示解壓")
+    s.add_argument("dir", help="遊戲目錄、交接包 zip、放交接包的資料夾，或既有專案目錄")
     s.set_defaults(func=cmd_detect)
 
     s = sub.add_parser("init", help="建立 projects/<game>/ 並辨識引擎")
     s.add_argument("game")
-    s.add_argument("--original", required=True, help="原始遊戲目錄（會做 symlink）")
+    s.add_argument("--original", required=True, help="原始遊戲目錄（會做 symlink；Windows 沒權限時退回 junction）")
     s.add_argument("--engine", help="強制指定引擎名稱")
     s.add_argument("--variant", help="強制指定變體（2.x/3.x/MV/MZ）")
     s.set_defaults(func=cmd_init)
@@ -294,10 +420,33 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("status", help="關卡狀態與翻譯進度")
     s.add_argument("game")
     s.set_defaults(func=cmd_status)
+
+    s = sub.add_parser("handoff", help="兩站接力：pack 打包交接包給另一站 / unpack 收包（docs/two-site.md）")
+    hs = s.add_subparsers(dest="action", required=True)
+    hp = hs.add_parser("pack", help="打包 agt.json + exported/ + glossary + HANDOFF.md 成 zip（seq+1）")
+    hp.add_argument("game")
+    hp.add_argument("--to", choices=site.SITES, help="交給哪一站（預設：另一站）")
+    hp.add_argument("-o", "--out", help="輸出目錄（預設 projects/<game>/handoff/）")
+    hp.add_argument("--no-logs", action="store_true", help="不帶 logs/*.log")
+    hp.add_argument("--allow-dirty", action="store_true", help="repo 有未提交變更也照包")
+    hu = hs.add_parser("unpack", help="收交接包：合併 agt.json、覆蓋 exported/（先備份）；拒收舊 seq")
+    hu.add_argument("src", help="交接包 zip、解開的目錄，或放了多個交接包的資料夾（取最新）")
+    hu.add_argument("--game", help="專案名（預設用交接包 manifest 的；兩站應一致）")
+    hu.add_argument("--force", action="store_true", help="seq 不比本地新也照收")
+    s.set_defaults(func=cmd_handoff)
+
+    s = sub.add_parser("playtest", help="實機端：啟動遊戲、等 N 秒、列出新的 crash.dmp／Player.log")
+    s.add_argument("game")
+    s.add_argument("--exe")
+    s.add_argument("--wait", type=float, default=20)
+    s.add_argument("--kill", action="store_true")
+    s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(func=cmd_playtest)
     return ap
 
 
 def main(argv: list[str] | None = None) -> int:
+    fsutil.utf8_stdio()
     a = build_parser().parse_args(argv)
     return a.func(a)
 
