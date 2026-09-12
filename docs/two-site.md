@@ -79,7 +79,7 @@ dgxluna 上若某個專案有 `original/`（遊戲搬得過來），那個專案
 
 | 方式 | 設定 | 注意 |
 |---|---|---|
-| Google Drive 共用資料夾（建議） | 兩站 `config.local.yaml` 都設 `handoff_dir`：dgxluna `~/gdrive/GalTransl-Agent-Tools`，筆電例如 `G:/My Drive/GalTransl-Agent-Tools` | rclone 掛載與 Drive 桌面版都是**非同步上傳**：pack 後 `ls -la` 看大小一致、等同步圖示變勾，再告訴使用者「可以到另一站 unpack」。收方 `agt detect <handoff_dir>/<game>/handoff/` 會列出所有包並挑最新。實測（2026-09-12）筆電 11:34 pack，dgxluna 的 rclone 掛載看到的 mtime 同為 11:34，可視為分鐘級延遲；Drive 磁碟機名可能是中文（`G:/我的雲端硬碟/…`）。 |
+| Google Drive 共用資料夾（建議） | 兩站 `config.local.yaml` 都設 `handoff_dir`：dgxluna `~/gdrive/GalTransl-Agent-Tools`，筆電例如 `G:/My Drive/GalTransl-Agent-Tools` | rclone 掛載與 Drive 桌面版都是**非同步上傳**：pack 後 `ls -la` 看大小一致、等同步圖示變勾，再告訴使用者「可以到另一站 unpack」。收方 `agt detect <handoff_dir>/<game>` 或 `…/<game>/handoff/` 都會列出所有包並挑最新（`pick_latest` 當層找不到會往下找一層，但只找一層：指到 `<handoff_dir>` 本身找不到）。實測（2026-09-12）筆電 11:34 pack，dgxluna 的 rclone 掛載看到的 mtime 同為 11:34，可視為分鐘級延遲；Drive 磁碟機名可能是中文（`G:/我的雲端硬碟/…`）。 |
 | 使用者手動搬 | 不設 `handoff_dir` | `pack` 印出 `projects/<game>/handoff/<zip>` 路徑，請使用者搬到另一站任意位置，`unpack <zip>` 即可。dgxluna 端可用 `SendUserFile`（≤ 30 MiB）。 |
 
 交付物 `out/`（補丁本體）不走交接包：它在實機端產生，直接給使用者裝。

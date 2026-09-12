@@ -128,9 +128,11 @@
   （RJ01657316 實測第二次輸出逐位元組相同，已收斂）。
 - **模型會留下日文敬稱**：`後輩ちゃん` 有 41 條翻成「學妹醬」、97 條翻成「學妹」。glossary 寫了 `後輩ちゃん->學妹`
   也只是建議，不是強制。G8 要統計同一原文的譯法分布之外，也要掃「醬／桑／君」這類殘留敬稱。
-- **`agt detect <handoff_dir>/<game>` 找不到交接包**：`core/handoff.pick_latest` 用 `glob("*.zip")` 只看當層，
-  但 `handoff pack` 是複製到 `<handoff_dir>/<game>/handoff/`，差一層（同函式的 `_game_hints` 用的是 `rglob`）。
-  CLAUDE.md 第 6 節寫「收方 `agt detect <那個資料夾>`」，是文件與行為不一致。要 detect 到就指到 `…/<game>/handoff`。
+- **`agt detect <handoff_dir>/<game>` 找不到交接包**（已修）：`core/handoff.pick_latest` 原本用 `glob("*.zip")` 只看當層，
+  但 `handoff pack` 是複製到 `<handoff_dir>/<game>/handoff/`，剛好差一層（同函式的 `_game_hints` 用的卻是 `rglob`，
+  所以遊戲特徵找得到、交接包找不到）。CLAUDE.md 第 6 節寫「收方 `agt detect <那個資料夾>`」，是文件與行為不一致。
+  修法：當層找不到才往下找一層。**只找一層**——`<handoff_dir>` 底下是多個遊戲，整棵 rglob 會把別款遊戲的包混進同一個候選清單，
+  `unpack` 又是「取 seq 最大的」，混到別款就會收錯專案。目錄本身是交接包或專案時仍優先當它自己，不掃子目錄。
 - **`unpack` 前先切好分支，repo 不同步警告就不會出現**：manifest 記的 `repo_head` 是實機端 pack 時的 HEAD
   （這次在 `feat/unity-bundle-mono`，不是 main）。在 main 上 unpack 會警告；先 `git fetch && git checkout <分支>` 再收就乾淨。
 
