@@ -241,7 +241,9 @@ def pack(p: Project, to: str, *, from_site: str, out_dir: Path | None = None,
                 copy_verified = (copy.size, copy.sha256) == (digest.size, digest.sha256)
                 if copy_verified:
                     sidecar = copied_to.parent / (copied_to.name + ".sha256")
-                    sidecar.write_text(f"{digest.sha256}  {name}\n", encoding="utf-8")
+                    # newline="" 讓 \n 原樣寫出：Windows 預設會寫成 CRLF，收方的 GNU sha256sum -c
+                    # 會把 \r 當成檔名的一部分而找不到檔（2026-09-16 演練實測）。
+                    sidecar.write_text(f"{digest.sha256}  {name}\n", encoding="utf-8", newline="")
                 else:
                     warnings.append(f"共用資料夾的複本與本機不符（{copy.size:,} vs {digest.size:,} bytes）"
                                     "——重新複製或改手動搬；先不要叫對方收")

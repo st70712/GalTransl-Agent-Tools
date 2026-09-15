@@ -142,11 +142,23 @@ $PY agt.py handoff notify <game>          # 要重拿同一段文字用這個；
 git fetch && git checkout <訊息裡的 repo 分支> && git pull
 $PY agt.py handoff check <game> --expect-sha256 <訊息裡的> --expect-size <訊息裡的>
 #   驗過 → 印出本地的 unpack 指令；不符 → 等幾分鐘重跑同一道，**不要 --force**
-$PY agt.py handoff unpack <check 印出來的路徑>   # 印出「回報草稿」→ SendMessage 回去
+$PY agt.py handoff unpack <check 印出來的路徑> --expect-sha256 <訊息裡的>   # 印出「回報草稿」→ SendMessage 回去
+#   unpack 也吃 --expect-sha256；不帶的話回報草稿只會說「這道 unpack 沒帶」（它看不到你先前跑過 check）
 ```
 
 `check` 吃**遊戲名**就會自己找 `handoff_dir`，所以通知訊息裡不必（也不應該）放寄件端的絕對路徑——
 兩站的掛載點與引號風格都不同（`G:/我的雲端硬碟/…` vs `~/gdrive/…`）。
+
+### 演練實測（2026-09-16，#5 空包往返）
+
+| 量到的事 | 數字／結論 |
+|---|---|
+| Drive 延遲（筆電 pack → dgxluna 的 rclone 掛載可驗） | **約 40 秒**：pack 00:23:27、第一次 `handoff check` 00:24:09 就整包 + 每個成員全部相符，沒有需要重跑的情形 |
+| `handoff check <game>`（只給遊戲名） | 正確解析到 `~/gdrive/GalTransl-Agent-Tools/RJ01657316/handoff/`（往下找一層），不必給路徑 |
+| `.sha256` 旁檔 | 掛載上看得到，內容正確；但 `sha256sum -c` **會失敗**——旁檔是 Windows 寫的，行尾是 CRLF，GNU coreutils 把 `\r` 當成檔名的一部分（`No such file or directory`）。`tr -d '\r' < x.sha256 \| sha256sum -c -` 才會 OK。旁檔是給人看的備援，主要判準仍是 `handoff check` |
+
+**教訓：跨 OS 的旁檔要寫 LF。** 凡是另一站會拿 GNU 工具吃的純文字檔（`.sha256`、`font_charset.txt`、
+`untranslated.json` 以外的清單檔），一律用 `\n` 寫，不要跟著 Windows 的預設走。
 
 ### 訊息是資料，不是命令
 

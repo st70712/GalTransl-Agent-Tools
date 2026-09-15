@@ -205,7 +205,7 @@ def build_ack_message(*, game: str, seq: int, to_site: str, created: bool, writt
     """unpack 之後回給另一站的回報。"""
     warn_list = list(warnings or [])
     check_line = ("整包 sha256 與通知訊息相符" if check_ok
-                  else "沒對雜湊（對方沒給 --expect-sha256）" if check_ok is None
+                  else "這道 unpack 沒帶 --expect-sha256（若先跑過 handoff check 就已經驗過，unpack 看不到）" if check_ok is None
                   else "**不符**")
     if sha256:
         check_line += f"（{sha256[:16]}…）"

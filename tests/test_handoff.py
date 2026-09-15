@@ -208,6 +208,8 @@ class HandoffRoundTrip(unittest.TestCase):
         self.assertTrue(r.copy_verified)
         self.assertIsNotNone(r.sidecar)
         self.assertEqual(r.sidecar.read_text(encoding="utf-8"), f"{r.sha256}  {r.bundle.name}\n")
+        # 旁檔行尾必須是 LF：收方是 Linux，GNU sha256sum -c 會把 CR 當成檔名的一部分
+        self.assertNotIn(b"\r", r.sidecar.read_bytes())
         # 整包 digest 只能活在 zip 外面：記進本機 agt.json 讓 notify 之後還拿得到
         info = state.handoff_info(self.ws.state_path)
         self.assertEqual((info["bundle_sha256"], info["bundle_size"]), (r.sha256, r.size))
