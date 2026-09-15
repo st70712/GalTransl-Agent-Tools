@@ -4,9 +4,17 @@
 # --- dgxluna（翻譯端；遊戲搬得過來時改 full）---
 # site: translator
 # handoff_dir: ~/gdrive/GalTransl-Agent-Tools
+# peer_agent: galtransl-agent-tools-09               # 實機端那個對話的名字
 
 # --- Windows 筆電（實機端）---
 # site: workstation
 # handoff_dir: G:/My Drive/GalTransl-Agent-Tools      # Google Drive 桌面版的同步資料夾；沒有就留空，交接包留在 projects/<game>/handoff/
+# peer_agent: agt-translator                          # 翻譯端那個對話的名字
 # python_stdlib: C:/Users/<you>/AppData/Local/Programs/Python/Python312/python.exe   # 可省略：找不到會退回目前的 python
 # galtransl_root / llama_server_bin / model_gguf 在實機端用不到，不用填
+
+# peer_agent = 另一站 Claude 對話的可定址名字（控制通道，docs/two-site.md §6b）。
+#   只有在**它自己的機器上** /rename 過的 session 才有名字；自動產生的名字在 Remote Control
+#   連線上會被隱去，顯示成 (unnamed session)，沒辦法當收件人。
+#   這個值會過期——session resume／重連後名字會變。送訊息前一律先 ListAgents 確認；
+#   過期時用 AGT_PEER_AGENT=新名字 臨時覆蓋，或由**使用者**改這個檔（代理不自己改設定檔）。

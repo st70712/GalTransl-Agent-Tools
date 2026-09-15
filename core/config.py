@@ -32,6 +32,9 @@ DEFAULTS: dict[str, str] = {
     # 兩站接力（docs/two-site.md）：site = workstation | translator | full；handoff_dir = 兩站共用的交接資料夾（選用）
     "site": "",
     "handoff_dir": "",
+    # 控制通道（docs/two-site.md §6b）：另一站 Claude 對話的可定址名字（ListAgents 看得到的那個）。
+    # 新鍵一定要列在這裡：AGT_* 覆蓋是對 DEFAULTS ∪ 設定檔的鍵做迴圈，沒列就連 AGT_PEER_AGENT 都會被靜默忽略。
+    "peer_agent": "",
 }
 
 
@@ -81,6 +84,16 @@ def get(key: str, default: str | None = None) -> str | None:
 def site() -> str:
     """config 指定的站點（workstation／translator／full），沒設就回傳空字串。"""
     return load_config().get("site", "").strip()
+
+
+def peer_agent() -> str:
+    """另一站 Claude 對話的可定址名字；沒設就回傳空字串。
+
+    這是**提示不是事實**：session resume／重連後名字會變（docs/two-site.md §6b）。
+    送訊息前一律先 ListAgents 確認；過期時用 ``AGT_PEER_AGENT=新名字`` 臨時覆蓋，
+    或請使用者改 config.local.yaml——代理不自己改設定檔。
+    """
+    return load_config().get("peer_agent", "").strip()
 
 
 def handoff_dir() -> Path | None:

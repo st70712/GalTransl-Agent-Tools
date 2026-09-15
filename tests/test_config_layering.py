@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -75,6 +76,30 @@ class ConfigLayering(unittest.TestCase):
              mock.patch.object(config, "LOCAL_CONFIG_PATH", self.local), \
              mock.patch.dict(os.environ, {"AGT_HANDOFF_DIR": str(self.tmp / "missing")}):
             self.assertIsNone(config.handoff_dir())
+
+    def test_peer_agent_layering(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("AGT_PEER_AGENT", None)
+            self.assertEqual(self._load()["peer_agent"], "")          # 沒設 → 空字串
+            self.local.write_text("peer_agent: agt-translator\n", encoding="utf-8")
+            self.assertEqual(self._load()["peer_agent"], "agt-translator")
+        with mock.patch.dict(os.environ, {"AGT_PEER_AGENT": "agt-translator-2"}):
+            self.assertEqual(self._load()["peer_agent"], "agt-translator-2")   # 名字過期時的逃生口
+        with mock.patch.object(config, "CONFIG_PATH", self.base), \
+             mock.patch.object(config, "LOCAL_CONFIG_PATH", self.local), \
+             mock.patch.dict(os.environ, {"AGT_PEER_AGENT": "  spaced  "}):
+            self.assertEqual(config.peer_agent(), "spaced")
+
+    def test_example_keys_are_in_defaults(self):
+        """範例檔裡註解掉的每個鍵都要在 DEFAULTS 裡。
+
+        AGT_* 覆蓋是對「DEFAULTS ∪ 設定檔已有的鍵」做迴圈：新鍵漏了 DEFAULTS，
+        使用者沒寫進設定檔時 AGT_<KEY> 會被靜默忽略。把這條坑釘成回歸測試。
+        """
+        text = (REPO / "config.local.example.yaml").read_text(encoding="utf-8")
+        keys = set(re.findall(r"^#\s*([a-z_]+):", text, re.MULTILINE))
+        self.assertTrue(keys, "範例檔裡找不到任何鍵，正則可能失效了")
+        self.assertEqual(keys - set(config.DEFAULTS), set())
 
 
 if __name__ == "__main__":
