@@ -1,8 +1,8 @@
 {
-  "_doc": "Unity 遊戲、文本在 resources.assets 的 JSON 表格 TextAsset。context 由每款遊戲的 unity_rules.json 決定；這裡只定義各 context 的優先級與政策。",
+  "_doc": "Unity 遊戲。文本在 resources.assets 的 JSON 表格 TextAsset（RJ01483219）或 MonoBehaviour／ScriptableObject 欄位（RJ01657316，單檔 data.unity3d bundle、Mono）。context 由每款遊戲的 rules/<專案名>.json 決定；這裡只定義各 context 的優先級與政策。",
   "schema_version": 1,
   "name": "unity_textasset",
-  "display_name": "Unity (JSON TextAsset)",
+  "display_name": "Unity (JSON TextAsset / MonoBehaviour)",
   "aliases": [
     "unity",
     "unity_json",
@@ -29,7 +29,9 @@
     ],
     "globs_any": [
       "*_Data/globalgamemanagers",
-      "*/*_Data/globalgamemanagers"
+      "*/*_Data/globalgamemanagers",
+      "*_Data/data.unity3d",
+      "*/*_Data/data.unity3d"
     ],
     "magic": [],
     "negative_files": [
@@ -110,12 +112,17 @@
     "Command2/Command3（資產路徑，如 Assets/…/Scene2_Voice.prefab）",
     "Name= 之外的複合子鍵（Anim=、C1=…）——動畫／條件參數",
     "Memo／Comment／*ev_ 列的 Arg1——開發者備註",
-    "SystemMessage.Name、ScenarioName、IconPath、GraphicPath——鍵與路徑"
+    "SystemMessage.Name、ScenarioName、IconPath、GraphicPath——鍵與路徑",
+    "MonoBehaviour 的鍵名欄位：mTopicId／mIconName／mLabel／mJumpTo（標籤與跳躍）、mPortrait（立繪鍵）、mVoice（語音鍵）、mCsvFolder",
+    "ImageCatalog／AudioCatalog／SlotLabel／GenreSlotTable 這類目錄型 MonoBehaviour 的日文全是資產鍵名",
+    "mType 2 的 mText（unlock:topic_001 之類的指令列）"
   ],
   "patch": {
     "steps": [
       "copy_changed_assets",
-      "tmp_dynamic_font",
+      "font_inject",
+      "tmp_dynamic_font（散檔建置）",
+      "dll_strings（rules 檔有宣告時）",
       "write_install_notes"
     ],
     "deliverables": {
@@ -126,28 +133,44 @@
       "mono": [
         "*_Data/resources.assets",
         "*_Data/sharedassets0.assets（動態字型）"
+      ],
+      "mono+bundle": [
+        "*_Data/data.unity3d（整個資產包：文字＋字型設定，百 MB 級）",
+        "*_Data/Managed/<遊戲>.dll（rules 有 dll_strings 時）"
       ]
     },
-    "font_doc": "TextMeshPro 字型圖集（sharedassets0 的 TMP_FontAsset）若是靜態圖集，缺字會顯示方框；smoke build 必看。",
+    "font_doc": "TextMeshPro 靜態字型圖集缺字會顯示方框；smoke build 必看。對策兩種（一次只用一種）：font_inject（備援字型注入，任何建置）與 tmp_dynamic_font（靜態圖集動態化，散檔建置）。",
     "tmp_dynamic_font": {
-      "_doc": "agt package 時執行 vendor/tmp_font_dynamic.py：把 family 在內嵌 Font 找得到的 TMP 字型資產改成動態造字（圖集像素內嵌可讀）。RJ01483219 實機驗證通過（變體 H）。設 false 可關閉。",
+      "_doc": "agt package 時執行 vendor/tmp_font_dynamic.py：把 family 在內嵌 Font 找得到的 TMP 字型資產改成動態造字（圖集像素內嵌可讀）。RJ01483219 實機驗證通過（變體 H）。設 false 可關閉。 只對散檔建置生效；bundle 建置用 font_inject。",
       "enabled": true,
       "args": [
         "--inline-atlas",
         "--keep-free-rects"
       ],
       "assets": "sharedassets0.assets"
+    },
+    "font_inject": {
+      "_doc": "agt package 時執行 vendor/inject_font.py：把 projects/<game>/<font> 的 TTF/OTF 寫進既有 Font 物件（into），並把以它為來源的動態 TMP 字型資產（Unity 內建 'LiberationSans SDF - Fallback'）掛成 TMP Settings 全域備援。字型檔不存在就跳過。RJ01657316 變體 A（實機結果見 NOTES.md）。",
+      "enabled": true,
+      "font": "font/NotoSansJP-Regular.otf",
+      "into": "LiberationSans",
+      "args": []
+    },
+    "dll_strings": {
+      "_doc": "rules/<專案名>.json 的 dll_strings 區塊：{\"<dll 名>\": {\"原字串\": \"譯文\"}}；package 用 vendor/patch_dll_strings.py 原地覆蓋 Managed/<dll> 的 #US 字串堆，交付物多一個 dll。先用 vendor/scan_dll_strings.py 找拿台詞原文做比對／寫死顯示文字的常數。"
     }
   },
   "acceptance_checklist": [
-    "遊戲開得起來（UnityPy 重新序列化的 resources.assets 被接受）",
-    "對話視窗顯示中文，不是方框（TMP 字型缺字）",
-    "選項、話題標題、道具／技能說明",
+    "遊戲開得起來（UnityPy 重新序列化的 resources.assets 或 data.unity3d 被接受）",
+    "對話視窗顯示中文，不是方框（TMP 字型缺字；font_inject 變體看 你／她／嗎 這些原圖集沒有的字）",
+    "選項、話題標題、道具／技能說明、開場 UI（同意畫面）",
     "<param#her_name> 之類的佔位符有被換成名字，不是字面顯示",
     "多行對話沒有超出訊息框",
-    "說話者名字牌顯示譯名，立繪／表情正常（RJ01483219 已驗證 Name= 只是顯示文字）"
+    "說話者名字牌顯示譯名，立繪／表情／語音正常（名字牌與立繪鍵是不同欄位）",
+    "開場／轉場的黑幕會淡出、提示句是中文（程式碼寫死的字串已由 dll_strings 覆蓋）"
   ],
   "docs": [
-    "engines/unity_textasset/NOTES.md"
+    "engines/unity_textasset/NOTES.md",
+    "engines/unity_textasset/rules/RJ01657316.json"
   ]
 }

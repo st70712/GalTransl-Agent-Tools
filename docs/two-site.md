@@ -79,7 +79,7 @@ dgxluna 上若某個專案有 `original/`（遊戲搬得過來），那個專案
 
 | 方式 | 設定 | 注意 |
 |---|---|---|
-| Google Drive 共用資料夾（建議） | 兩站 `config.local.yaml` 都設 `handoff_dir`：dgxluna `~/gdrive/GalTransl-Agent-Tools`，筆電例如 `G:/My Drive/GalTransl-Agent-Tools` | rclone 掛載與 Drive 桌面版都是**非同步上傳**：pack 後 `ls -la` 看大小一致、等同步圖示變勾，再告訴使用者「可以到另一站 unpack」。收方 `agt detect <handoff_dir>/<game>/handoff/` 會列出所有包並挑最新。實測（2026-09-12）筆電 11:34 pack，dgxluna 的 rclone 掛載看到的 mtime 同為 11:34，可視為分鐘級延遲；Drive 磁碟機名可能是中文（`G:/我的雲端硬碟/…`）。 |
+| Google Drive 共用資料夾（建議） | 兩站 `config.local.yaml` 都設 `handoff_dir`：dgxluna `~/gdrive/GalTransl-Agent-Tools`，筆電例如 `G:/My Drive/GalTransl-Agent-Tools` | rclone 掛載與 Drive 桌面版都是**非同步上傳**：pack 後 `ls -la` 看大小一致、等同步圖示變勾，再告訴使用者「可以到另一站 unpack」。收方 `agt detect <handoff_dir>/<game>` 或 `…/<game>/handoff/` 都會列出所有包並挑最新（`pick_latest` 當層找不到會往下找一層，但只找一層：指到 `<handoff_dir>` 本身找不到）。實測（2026-09-12）筆電 11:34 pack，dgxluna 的 rclone 掛載看到的 mtime 同為 11:34，可視為分鐘級延遲；Drive 磁碟機名可能是中文（`G:/我的雲端硬碟/…`）。 |
 | 使用者手動搬 | 不設 `handoff_dir` | `pack` 印出 `projects/<game>/handoff/<zip>` 路徑，請使用者搬到另一站任意位置，`unpack <zip>` 即可。dgxluna 端可用 `SendUserFile`（≤ 30 MiB）。 |
 
 交付物 `out/`（補丁本體）不走交接包：它在實機端產生，直接給使用者裝。
@@ -125,6 +125,17 @@ python agt.py playtest <game> [--exe PATH] [--wait 20] [--kill] [--dry-run]
   列出比啟動時間新的 `%LOCALAPPDATA%\Temp\<公司>\<遊戲>\Crashes\**\crash.dmp`、`%USERPROFILE%\AppData\LocalLow\<公司>\<遊戲>\Player.log`、遊戲目錄下的 `*.log`。
 - 結果記在 `agt.json` 的 `playtest` 關卡；**`user_boot_ok` 只由使用者目視後 mark**（字有沒有出來、□、亂碼，代理看不到畫面）。
 - 崩潰：把 `crash.dmp` 路徑寫進 HANDOFF.md；`.venv-unity` 有 `minidump` 可解析例外位址落在哪個模組。改字型／圖集／旗標一次只改一件事，出 `variants/<字母>/` 讓使用者二分。
+
+## 9b. 實戰紀錄：RJ01657316（2026-09-12，第一次真正的兩站接力）
+
+- 實機端在 **功能分支**（`feat/unity-bundle-mono`）上改了轉接器才跑 G1–G5：交接包的 manifest 記的是該分支的 HEAD，
+  翻譯端 `git pull` 之前要先 `git fetch && git checkout <分支>`，否則 unpack 會警告「repo 不同步」而且規則檔（`rules/RJ01657316.json`）根本不在 main 上。
+  `HANDOFF.md`「請對方做」第一行就要寫分支名。
+- 交付物是整個 `data.unity3d`（165 MB）：`package` 印出的 `out/` 不能用 `SendUserFile`，zip 後放 `<handoff_dir>/<game>/`；
+  安裝說明的備份行是 `ren data.unity3d data.unity3d.orig`。
+- 實機端在 pack #1 之前先用**假譯文**（`script.json` 副本，12 條含 你／她／嗎 的字串）跑 import → verify → 字型注入 → 遊戲副本 playtest，
+  提前回答「重新打包的 bundle 遊戲吃不吃」「字型對策會不會崩」，翻譯端不用等這兩個答案。變體放 `projects/<game>/variants/<字母>/game/`（整個遊戲副本，原目錄不動）。
+- 翻譯端的 smoke `--filter`：開場對話是 `mTopics\[0\]\.` 的 dialog、同意畫面是 `level0/TextMeshProUGUI` 的 ui；兩者都在一開遊戲就看得到。
 
 ## 10. FAQ
 

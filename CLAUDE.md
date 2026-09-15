@@ -50,7 +50,7 @@ PYT=/raid/home/jimhsieh/miniconda3/envs/nllb-env/bin/python     # 只有 dgxluna
 |---|---|
 | `agt.py`、`core/`、`engines/**`、`tools/check_codes.py`、`tools/playtest.py`、`tests/` | `$PY`（純標準庫；`config.yaml` 的 `python_stdlib`，找不到就退回目前的 python） |
 | `tools/translate.py`（非 `--dry-run`）、`tools/fix_text.py`（用 opencc） | `$PYT`（`python_nllb`，只有 dgxluna 有） |
-| 有宣告 `python_env` 的引擎（目前：`unity_textasset` → `.venv-unity`，UnityPy） | 該引擎 `profile.json` 的 `python_env.venv`；`bash tools/setup_env.sh <engine>` 建立，轉接器自動使用（Windows 是 `.venv-unity/Scripts/python.exe`） |
+| 有宣告 `python_env` 的引擎（目前：`unity_textasset` → `.venv-unity`，UnityPy + TypeTreeGeneratorAPI + fonttools） | 該引擎 `profile.json` 的 `python_env.venv`；`bash tools/setup_env.sh <engine>` 建立，轉接器自動使用（Windows 是 `.venv-unity/Scripts/python.exe`） |
 
 - 設定三層：`config.yaml`（進 git，dgxluna 的絕對路徑）← `config.local.yaml`（**不進 git**，每台機器的 `site`、`handoff_dir`、直譯器；範例 `config.local.example.yaml`）← 環境變數 `GALTRANSL_ROOT`／`AGT_*`。
 - **環境政策**：核心（`core/`、`agt.py`、`tools/check_codes.py`、`tests/`）只用標準庫。引擎的 vendor 腳本若需要第三方套件
@@ -82,7 +82,7 @@ projects/<game>/    每款遊戲的工作目錄（不進 git）：original/ extr
 
 `projects/<game>/`：`original/` 唯讀（symlink／junction；翻譯端骨架專案沒有）；`exported/` 放 `script.json`、`format_specification.json`、
 `.agt.json`（sidecar，記引擎／編碼）、`untranslated.json`、`.agt_checkpoint.json`；`translated/` 每次 import 整個重建；`out/` 是交付物 + `安裝說明.txt`；
-`handoff/` 放交接包 zip；`glossary.txt`（選用）格式 `原文->譯文 // 備註`；`font_charset.txt`／`charset_map.json`（選用）給 fix_text 做缺字檢查；
+`handoff/` 放交接包 zip；`glossary.txt`（選用）格式 `原文->譯文#備註`（**備註符號是 `#` 不是 `//`**，見 `docs/translation-quality.md`）；`font_charset.txt`／`charset_map.json`（選用）給 fix_text 做缺字檢查；
 `HANDOFF.md` 是跨機／跨對話交接備忘（範本 `docs/templates/HANDOFF.template.md`）。
 
 ## 5. 硬性關卡（順序不可調，任一失敗就停）
@@ -130,6 +130,10 @@ projects/<game>/    每款遊戲的工作目錄（不進 git）：original/ extr
   `glossary.txt`、`font_charset.txt`、`charset_map.json`、`unity_rules.json`、`HANDOFF.md`、`logs/*.log`。檔名 `<game>-NNN-to-<site>-<時間>.zip`，根目錄 `handoff.json` manifest（含每檔 sha256、repo HEAD）。
 - **傳輸兩條路**：`config.local.yaml` 設 `handoff_dir`（dgxluna `~/gdrive/GalTransl-Agent-Tools`，筆電 Google Drive 桌面版資料夾）→ pack 自動複製到 `<handoff_dir>/<game>/handoff/`，
   收方 `agt detect <那個資料夾>` 挑最新；沒設就留在 `projects/<game>/handoff/`，把路徑告訴使用者手動搬。rclone／Drive 是非同步上傳：pack 後 `ls -la` 確認大小再叫對方收。
+- **找交接包會往下找一層**：`detect`／`unpack` 先看你給的那層有沒有 `<game>-NNN-to-<site>-<時間>.zip`，
+  當層沒有才往下找一層（`core/handoff.pick_latest`）。所以指到 `<handoff_dir>/<game>` 或 `<handoff_dir>/<game>/handoff/` 都找得到。
+  **只往下一層**，不整棵掃——指到 `<handoff_dir>`（底下是多個遊戲）就找不到，要指到某一款。
+  目錄本身就是交接包或專案（有 `handoff.json`，或 `agt.json` + `exported/script.json`）時優先當它自己，不去掃子目錄。
 - **git 規則**：`pack` 前 commit + push（有未提交變更 pack 會拒絕，`--allow-dirty` 才放行）、`unpack` 前 `git pull`；manifest 的 HEAD 不一致會警告。
   **其他時候不主動 push、不設新 remote。**
 - **`HANDOFF.md`**：每次 pack 前在「交接紀錄」最上方加一段（本站完成／請對方做／需要對方回答／實機回報）。收包後第一件事是讀它。
@@ -149,7 +153,7 @@ projects/<game>/    每款遊戲的工作目錄（不進 git）：original/ extr
 | Bishop / BSXScript | `*.bsa` 封包、`bsxx.dat`（UTF-16LE） | 指標 → `engines/bishop_bsx/README.md`、https://github.com/st70712/GalTransl-BISO |
 | TyranoScript | `data/scenario/*.ks`、`tyrano/` | 指標（翻譯驅動在 `/raid/home/jimhsieh/GalTransl/text/translate_tyranoscript.py`，本專案無導出／導入工具） |
 | KiriKiri | `*.xp3`、`*.ks` | 指標 |
-| Unity（JSON 表格 TextAsset） | `UnityPlayer.dll`、`*_Data/globalgamemanagers`、`resources.assets` 內有 `{"Rows":[…]}` TextAsset | **支援** `engines/unity_textasset`（需 `.venv-unity` 的 UnityPy；UI 標籤／bundle 為第二階段） |
+| Unity | `UnityPlayer.dll` + `*_Data/globalgamemanagers`（散檔）或 `*_Data/data.unity3d`（單檔 bundle）；IL2CPP 或 Mono | **支援** `engines/unity_textasset`：JSON 表格 TextAsset 或 MonoBehaviour 欄位（type tree 由 DLL 產生）＋ TMP UI 標籤；每款一份 `rules/<專案名>.json`；需 `.venv-unity`（UnityPy + TypeTreeGeneratorAPI） |
 | Ren'Py | `game/*.rpa`、`*.rpyc` | 指標 |
 
 ## 8. 決策樹
@@ -172,6 +176,8 @@ projects/<game>/    每款遊戲的工作目錄（不進 git）：original/ extr
 - 會改變檔案長度的長度敏感欄位（Wolf `Game.dat` 視窗標題）
 
 反過來：任何「看起來像流程控制」的字串參數，都要先確認它不是顯示文字。
+**也要反過來查程式**：程式碼會拿顯示文字當開關——翻譯前掃遊戲程式的字串常數（Unity Mono：`engines/unity_textasset/vendor/scan_dll_strings.py`），
+  `Contains`／`==`／`StartsWith` 對台詞原文的地方，譯文要跟程式一起改（`rules/<專案名>.json` 的 `dll_strings`），否則像 RJ01657316 那樣整場黑畫面。
 
 ## 10. 何時停下來問使用者
 

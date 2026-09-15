@@ -1,6 +1,7 @@
 # Unity（JSON 表格 TextAsset）NOTES
 
-首例：RJ01483219《秘密のシェアハウスせいかつ》v1.07（OneUp／いぬすく圈，2026-09-11）。
+首例：RJ01483219《秘密のシェアハウスせいかつ》v1.07（OneUp／いぬすく圈，2026-09-11）——散檔、IL2CPP、JSON 表格 TextAsset。
+第二例：RJ01657316《騙され呑みニケーション》v1.0.2（おうち開発室，2026-09-12）——單檔 data.unity3d、Mono、ScriptableObject 文本，見檔尾。
 同作者的下一款很可能沿用同一套表格系統，`rules/RJ01483219.json` 可直接當範本。
 
 ## 辨識特徵
@@ -83,3 +84,88 @@
 - 開場對話顯示中文、不是方框（內建 NotoSansJP SDF 字型圖集缺字風險；缺字請回報是哪些字）
 - `<param#her_name>` 有被換成名字；多行台詞沒有超出訊息框；`<size>` 標籤沒有字面顯示
 - 第二階段：level0/level1 的 TextMeshProUGUI 標籤（122+4 個，raw 位移 88 起為 `m_text`）、bundle 內 MonoBehaviour（有 type tree）
+
+## 第二例：RJ01657316《騙され呑みニケーション》v1.0.2（おうち開発室，2026-09-12，兩站接力）
+
+同引擎、不同作者，三個假設全部翻掉：**單檔 `data.unity3d` bundle、Mono、文本在 ScriptableObject**。轉接器因此改成「容器／文本來源／腳本後端」三層各自判斷。
+
+### 辨識特徵
+- `*_Data/` 只有 `data.unity3d`（UnityFS v8，標頭 64 bytes 內有 `6000.4.1f1`）、`*.resource`、`Managed/*.dll`、`boot.config`；沒有 `globalgamemanagers` 散檔。
+- `Managed/ProjectRuntime.dll`＝遊戲程式（沒有 Assembly-CSharp）；無 `GameAssembly.dll` → Mono。
+- `agt detect` 信心 0.6（bundle 內容看不到 JSON 表），evidence 會說「文本在哪由 rules/<專案名>.json 決定」；`init` 照常。
+
+### 資料格式
+- bundle 內：`globalgamemanagers`、`globalgamemanagers.assets`（2276 個 MonoScript 都在這）、`sharedassets0–2.assets`、`level0–2`、`resources.assets`（4744 物件）、
+  三個 `.resS`（`resources.assets.resS` 解壓後 **1.7 GB**：整包 LZ4HC 壓成 164 MB）。
+- 文本：`resources.assets` 的 `TopicCatalog`（ScriptableObject，path_id 3706）：
+  `mTopics[62]{mTopicId, mLabel(話題標題), mIconName, mIsInitial, mNeedDrunkLevel, mLines[]}`，
+  `mLines[1510]{mType, mLabel, mSpeaker(後輩／あなた／店員), mPortrait(立繪鍵), mText, mJumpTo, mVoice(語音鍵)}`；
+  `mType` 0＝台詞、1＝選項（`mJumpTo` 是目標）、2＝指令（`mText`=`unlock:topic_001`）、3＝演出（`mPortrait`=`シーン1_カットイン_注文_*`）。
+  換行是 **`\r\n`**（CSV 匯入的痕跡），譯文要保持 `\r\n`。
+- UI：`TextMeshProUGUI.m_text`（118 個，66 個含日文；level0 同意畫面、level1/2 與 resources 的 prefab 重複各一份）。
+- 沒有 type tree：`Managed/*.dll` → `TypeTreeGeneratorAPI`（`unity_tables.typetree_generator`），`TopicCatalog` 與 118 個 TMP 物件 read→save raw 全部相同。
+  `ImageCatalog`／`AudioCatalog`／`UniversalRenderPipelineGlobalSettings` 的 type tree 讀到底會 `read_str out of bounds`——不在規則內就不讀。
+- 位址：`source_file = data.unity3d#resources.assets/TopicCatalog@3706`、`location = mTopics[3].mLines[12].mText`；UI 是 `data.unity3d#level0/TextMeshProUGUI@131` + `m_text`。
+- 規則檔 `rules/RJ01657316.json` 的 `monobehaviours` 區塊：`path`（`[*]`＝陣列每個元素）、`context`、`speaker_from`（同層欄位）、`when`（同層欄位值，`{"mType":[0]}`）。
+- 導出 2840 條：dialog 1334、speaker 1329、choice 111（話題標題 40 + 選項 71）、ui 66。
+
+### 絕不導出
+- `mCsvFolder`、`mTopicId`、`mIconName`、`mLines[].mLabel`／`mJumpTo`（跳躍標籤）、`mPortrait`（立繪鍵）、`mVoice`（語音鍵）、`mType 2/3` 列。
+- `ImageCatalog`（18,089 個日文字元全是圖片鍵）、`AudioCatalog`（SE 名 くぱぁ／嚥下）、`SlotLabel`／`GenreSlotTable`／`ViewManager`／`Scene2HelpView`（編輯器分類標籤）。
+- G3 抽樣用 grep 確認：導出裡沒有 `シーン\d_`、`^[a-z]\d{2}_\d$`、`unlock:` 樣式的字串（0 條）。
+
+### 控制碼
+- 沒有 `<param#…>`、沒有 `<size=…>`、富文本標籤 0 條（規則沿用但實際用不到）。
+- `\r\n` 換行（805 條原文）：**沒有任何工具會警告「原文 `\r\n`、譯文只有 `\n`」**——本 repo 完全不處理 `\r`，
+  `core/codes.py` 與 vendor `import_script.py` 都只比 `count("\n")`，CRLF 與 LF 行數相同。（#1 交接包寫「validate 會警告」是錯的。）
+  實際保住 `\r\n` 的是 GalTransl 後端 `SakuraTranslate.py`：送出前把 `\r\n`／`\n` 都攤平成字面 `\n`，回來依原文還原。
+  **翻譯端實測（2026-09-12）：CRLF 保留 805/805、11 條結尾單獨 `\n` 的 UI 標籤也保住、譯文 0 條含字面 `\n` 或單獨 `\r`，不需要額外補 `\r`。**
+  行數則有 19 條與原文不同（多一行／少一行），這是模型多吐或少吐一個 `\n` 標記，`line_count` 只警告。
+- **訊息窗排版上限：3 行、單行 49 半形寬**（量原文 dialog 得到；235 條原文就用滿 3 行）。
+  模型會超出：5 條吐成 4 行、6 條單行最寬 56。翻譯端用標點優先的重排把 10 條壓回上限內、不改用詞，
+  重排後譯文的行數與行寬上限與原文完全相同。**新專案在 G8 要量這兩個數字**，光看 `line_count` 警告抓不到「行數沒變但變寬」。
+- speaker：`後輩`／`あなた`／`店員`（各 665／661／2）＋ 1 條 `あなた 後輩`；用固定對照直接填（後輩→後輩、あなた→你、店員→店員、`あなた 後輩`→`你 後輩`），不交給模型。
+- glossary 備註符號必須是 `#` 不是 `//`（`//` 會被當成譯文的一部分餵進 prompt）；細節見 `docs/translation-quality.md`。
+
+### 補丁步驟
+- `import` 只重寫整個 `data.unity3d`（`save(packer="lz4")`，約 40 秒、165 MB；原檔 LZ4HC，UnityPy 沒有 HC 編碼器）；`verify` 展開 bundle 逐內部檔比對：
+  未涵蓋物件 raw 相同、規則涵蓋的 MonoBehaviour 只有規則路徑上的字串葉節點可以不同、`.resS` 雜湊相同。
+- `breakage`：刪掉 `mTopics[0].mLines` 最後一個元素 → verify 報「不在規則內的欄位被改了（長度 33 → 32）」✓。
+- 交付物：`騙され呑みニケーション_Data/data.unity3d`（165–169 MB）＋ `騙され呑みニケーション_Data/Managed/ProjectRuntime.dll`（字串堆已改）→ zip 放 `<handoff_dir>/RJ01657316/`；安裝說明備份行 `ren data.unity3d data.unity3d.orig`。
+- 字型（見下）：`profile.patch.font_inject` 在 `package` 時自動跑 `inject_font.py`，字型檔在 `projects/RJ01657316/font/NotoSansJP-Regular.otf`
+  （用 `extract_font.py` 從 RJ01483219 抽出，不進 git）。
+
+### 字型
+- 三套 TMP 靜態圖集 NotoSansJP-Bold／Medium（sharedassets0）、KiwiMaru-Medium（resources）各 7129 字＝JIS 一二級，4096×8192 串流在 bundle 內的 `.resS`。
+  對 Big5 常用字 **81.7%（缺 989）**：你／她／嗎／說／溫／戶／喔／啊／呢 全缺——不處理就沒法翻。
+- 內嵌 Font 只有 `LiberationSans`（902，350 KB）與 `PerfectDOSVGA437`，**沒有 CJK 字型檔**，所以第一例的「靜態圖集動態化」沒有來源可指。
+- 對策 A（`inject_font.py`，單一變數）：`LiberationSans.m_FontData` ← NotoSansJP-Regular.otf（4.5 MB，16,734 字，對 Big5 常用字 97.7%）；
+  Unity 內建的 `LiberationSans SDF - Fallback`（3693，動態、多圖集、來源＝902）跟著變成 CJK 動態字型，更新其 `m_FaceInfo`；
+  `TMP Settings.m_fallbackFontAssets = [3693]`。靜態圖集完全不動。剩下 122 字（嗯／喔…）用 `charset_map.json`（沿用 `charsets/NotoSansJP-Regular.map.json`）替字。
+- 對策 B（未做）：`tmp_font_dynamic.py` 改 type tree 版並支援 bundle 內 `.resS`，把對話用的那套靜態圖集動態化（+32 MB）。A 出 □ 才做。
+
+### 踩過的坑
+1. `script_classes` 自己解 `m_Script` 指標（offset 12）全錯：實際 offset 16（`m_Enabled` 對齊到 4），且 fileID=1 指向 `globalgamemanagers.assets` 的 external。
+   改用 UnityPy 基底解析＋PPtr，但要在掛 type tree 產生器之前（或暫時拿掉）呼叫，否則 `obj.read()` 走 type tree 炸在 `ImageCatalog`。
+2. 資源區塊 1.7 GB：比對用 memoryview 雜湊（`resource_digests`），不複製 bytes；roundtrip 兩個 env 同時在記憶體約 4 GB，筆電 32 GB 沒問題。
+3. Windows 上 UnityPy 開著的散檔 `unlink` 會 PermissionError（RJ01483219 迴歸時撞到）；roundtrip 不刪暫存檔。
+4. `packer="original"` 對 LZ4HC 是 NotImplemented → 明確 `"lz4"`。
+5. verify 曾對 MonoBehaviour 葉節點差異數設上限 2000（防「結構整個變了」），全量導入 2774 條合法譯文就被誤攔。結構壞掉 `tree_diff` 本來就只回一筆，上限已拿掉。
+
+### 程式碼寫死的字串（DLL）——本例最大的坑
+- **翻完後畫面全黑，不是 bundle 壞掉**：二分（N 純重存有圖、T 只翻 TopicCatalog 就黑）後用 `scan_dll_strings.py` 掃 `ProjectRuntime.dll`，
+  `Scene1Context.IsIntroBlackoutFadeLine` 是 `mText.Contains("同じサークルに所属する") && mText.Contains("先輩と後輩")`——開場黑幕靠認出第四句台詞才淡出。
+- 同類：`GetSpeakerColor`／`ResolveSpeakerColor` 用 `speaker == "後輩"`／`== "あなた"` 分色；`EnterTopicSelection`／`EnterOrderSelection`／`ShowSensitivityTooLowLine`
+  的提示句與說話者「あなた」寫死在 DLL（`ShowStaticLine`）；tooltip「酒を口に含む」。
+- 對策：`rules/RJ01657316.json` 的 `dll_strings` → `package` 的 `dll_step` 用 `patch_dll_strings.py` 原地覆蓋 #US 字串堆（新字串 UTF-16 長度 ≤ 原字串），
+  交付物多一個 `Managed/ProjectRuntime.dll`。**「同じサークルに所属する」「先輩と後輩」的譯文必須是第四句譯文的子字串**（現在是「他們同屬一個社團」「學長和學妹」）——翻譯端改那句要一起改規則檔。
+- 通則：每款 Unity 遊戲 G3 抽樣時順手跑 `scan_dll_strings.py <Managed/遊戲.dll>`，看 `next=` 有 `String::Contains`／`StartsWith`／`op_Equality`／`ShowStaticLine`／`SetText` 的日文常數。IL2CPP 沒有這條路（字串在 global-metadata.dat，要另外做）。
+
+### 實機驗收
+- 原版 playtest 15 s 存活；V0（假譯文 12 條，只重存 bundle）20 s 存活；A（V0 + 字型注入）20 s 存活，無 crash.dmp／Player.log（2026-09-12 20:33）。
+- **使用者目視變體 A 通過（2026-09-12 20:45）**：開場旁白中文正常，你／她／嗎／戶／溫／另 全部畫出——重存的 bundle 遊戲吃、TopicCatalog 譯文生效、備援字型注入生效。
+  瑕疵：備援字是 Noto **Regular**，對話主字型是 NotoSansJP-**Bold** 靜態圖集，缺字部分肉眼可見細一號；要一致得注入 Bold 版字型檔（TMP 備援不會套粗體）。
+  同意畫面（level0 的 TextMeshProUGUI）這次沒出現——推測首次開原版時已回答過、狀態存在 LocalLow/Unity/ 之下；UI 譯文是否顯示要等清除狀態或翻譯端 smoke 再看。
+  已 `mark user_boot_ok`；翻譯端可依 CLAUDE.md §6 例外自行 mark 直接進 G7。
+- 2026-09-15 二分：N（純重存）、N2（旗標仿原檔）有圖；T（只翻 TopicCatalog）黑 → DLL 台詞比對（見上）。
+- **最終版 D（bundle + DLL）使用者目視通過（2026-09-15）**：第四句黑幕淡出、立繪背景正常、話題提示句中文、名字牌分色正常。`user_final_ok`。

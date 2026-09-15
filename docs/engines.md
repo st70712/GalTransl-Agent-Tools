@@ -23,7 +23,7 @@
 | Bishop（BSXScript） | `*.exe` + `*.bsa` | `BSArc` 簽章（v1–3） | `bsxx.dat`（BSXScript 3.1，UTF-16LE） | UTF-16LE | 指標 → `engines/bishop_bsx/README.md` |
 | TyranoScript | `tyrano/`、`data/scenario/*.ks`、`index.html` | 無（或 Electron asar） | `data/scenario/*.ks` | UTF-8 | 指標；翻譯驅動 `/raid/home/jimhsieh/GalTransl/text/translate_tyranoscript.py` |
 | KiriKiri / KAG | `*.exe`（krkr）、`*.xp3` | `XP3\r\n\x1a` | `*.ks`（多半在 xp3 內，可能加密） | Shift-JIS / UTF-16 | 指標 |
-| Unity（JSON 表格 TextAsset） | `UnityPlayer.dll`、`*_Data/globalgamemanagers`、`resources.assets` 內有 `{"Rows":[…]}` TextAsset | **支援** `engines/unity_textasset`（需 `.venv-unity` 的 UnityPy；UI 標籤／bundle 為第二階段） |
+| Unity | `UnityPlayer.dll`、`*_Data/globalgamemanagers`（散檔）或 `*_Data/data.unity3d`（單檔 UnityFS bundle）；`GameAssembly.dll`＝IL2CPP、`*_Data/Managed/*.dll`＝Mono | 散檔 `resources.assets`／`sharedassets*.assets`／`level*`，或全部包在 `data.unity3d`（LZ4/LZ4HC） | JSON 表格 TextAsset（`{"Rows":[…]}`，RJ01483219）或 MonoBehaviour／ScriptableObject 欄位（`TopicCatalog.mTopics[].mLines[].mText`，RJ01657316）＋ `TextMeshProUGUI.m_text` UI 標籤 | UTF-8 | **支援** `engines/unity_textasset`（需 `.venv-unity`：UnityPy + TypeTreeGeneratorAPI；Addressables bundle 未支援） |
 | Ren'Py | `game/`、`renpy/`、`lib/` | `game/*.rpa` | `*.rpy` / `*.rpyc` | UTF-8 | 指標（官方有翻譯機制 `game/tl/`） |
 | NScripter | `nscript.dat`、`arc.nsa` | `arc.nsa` / `arc.sar` | `nscript.dat`（XOR 0x84） | Shift-JIS | 指標 |
 
@@ -40,6 +40,13 @@
 - 散檔不生效，一定要重新打包成 `.wolf`，且儲存形式要與原封包一致。
 - `Game.dat` 長度不能變；2.x 要設語言標記（位移 31 = 3）與 Big5 轉碼；3.x 直接 UTF-8。
 - 詳見 `engines/wolf_rpg/NOTES.md`。
+
+### Unity（`engines/unity_textasset`）
+- 每款遊戲一份 `rules/<專案名>.json`：`tables`（JSON 表格的欄位／複合欄位規則）與 `monobehaviours`（type tree 路徑規則，`[*]` 代表陣列每個元素，`when` 限制同層欄位值）。
+- 散檔或單檔 `data.unity3d` 自動判斷；bundle 整包載入、整包存回（LZ4）。往返關卡是逐物件＋資源區塊＋type tree 重存 raw 相同，不是逐位元組。
+- 沒有 type tree 的 MonoBehaviour：Mono 用 `Managed/*.dll`、IL2CPP 用 `GameAssembly.dll`＋`global-metadata.dat` 產生（TypeTreeGeneratorAPI）。
+- 字型：TextMeshPro 靜態圖集缺字 → `font_inject`（把 CJK 字型檔注入既有 Font 物件、掛成 TMP 全域備援）或 `tmp_dynamic_font`（靜態圖集動態化，散檔建置）。
+- 詳見 `engines/unity_textasset/NOTES.md`。
 
 ## 新增引擎
 

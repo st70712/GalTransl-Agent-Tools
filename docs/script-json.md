@@ -42,6 +42,7 @@
 |---|---|
 | RPG Maker | `Event1/Page0/Cmd5`、`Event1/Page0/Cmd5/Choice2`、`CE3/Cmd12`、`ID7/description`、`terms/messages/actorDamage`、`gameTitle` |
 | Wolf | `Ev3/Pg0/Cmd12/Str0`（地圖）、`CEv12/Cmd40/Str1`（公共事件）、`Type2/Data5/Field3`（資料庫）、`title`（Game.dat） |
+| Unity | JSON 表：`source_file=resources.assets#Data_Event`（bundle：`data.unity3d#resources.assets/Data_Event`）、`location=Rows[12]/Arg2`、`Rows[12]/Arg1/Name`（複合欄位子鍵）；MonoBehaviour：`source_file=data.unity3d#resources.assets/TopicCatalog@3706`（`<容器>#<內部檔>/<類別>@<path_id>`）、`location=mTopics[3].mLines[12].mText`（type tree 欄位路徑） |
 
 ## Sidecar `exported/.agt.json`
 

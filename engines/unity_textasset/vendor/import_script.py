@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Unity JSON 表格 TextAsset 的譯文檢查／導入／結構驗證（需 .venv-unity 的 UnityPy）。
+"""Unity 譯文檢查／導入／結構驗證（需 .venv-unity 的 UnityPy；MonoBehaviour 另需 TypeTreeGeneratorAPI）。
 
     python import_script.py validate exported/script.json
     python import_script.py import   <遊戲根目錄> exported/script.json -o translated [--rules R.json]
     python import_script.py verify   <遊戲根目錄> translated [--rules R.json]
 
-import：只重寫「有譯文變動」的 asset 檔（例如 *_Data/resources.assets），寫到 OUT/<*_Data>/…；
-        沒有任何變動就不產生檔案。TextAsset 以外的物件原樣保留。
-verify：OUT 裡每個 asset 檔與原檔逐物件比對：非 TextAsset 物件 raw 必須相同；表格 TextAsset 的列數、
-        ID 順序、非規則欄位、複合欄位的子鍵序列、<param#…> 佔位符都必須一致。任何錯誤 → exit 1。
+import：只重寫「有譯文變動」的容器檔（散檔 *_Data/resources.assets，或整個 *_Data/data.unity3d），寫到 OUT/<*_Data>/…；
+        沒有任何變動就不產生檔案。JSON 表用 dump 寫回 TextAsset；MonoBehaviour 用 type tree 寫回；其他物件原樣保留。
+verify：OUT 裡每個容器檔與原檔逐物件比對（bundle 展開到內部檔）：非文字物件 raw 必須相同；表格 TextAsset 的列數、
+        ID 順序、非規則欄位、複合欄位的子鍵序列、<param#…> 佔位符都必須一致；規則涵蓋的 MonoBehaviour 只有規則路徑
+        上的字串葉節點可以不同（結構、其他欄位一律相同）；bundle 的 .resS 資源區塊逐位元組相同。任何錯誤 → exit 1。
 """
 
 from __future__ import annotations
@@ -23,8 +24,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from unity_tables import (  # noqa: E402
-    JP, Rules, asset_files, entries_for_table, apply_entry, find_data_dir, iter_tables, load_env,
-    load_rules, parse_location, split_kv,
+    JP, Rules, apply_entry, apply_mb_entry, asset_files, entries_for_mb, entries_for_table, env_is_bundle,
+    find_data_dir, inner_name, is_mb_source, iter_monobehaviours, iter_tables, load_env, load_rules,
+    mb_source, parse_location, resource_digests, save_env, script_classes, serialized_files, split_kv,
+    table_source, tree_diff,
 )
 
 PLACEHOLDER_RE = re.compile(r"<param#[^>]+>")
@@ -52,7 +55,9 @@ def cmd_validate(args) -> int:
     soft: list[str] = []
     for e in done:
         o, t, loc = e["original"], e["translated"], e["location"]
-        _, _, sub = parse_location(loc)
+        sub = None
+        if not is_mb_source(e["source_file"]):
+            _, _, sub = parse_location(loc)
         if sub is not None and ("," in t or "=" in t):
             hard.append(f"[{e['index']}] {loc} 複合欄位譯文含半形逗號／等號（import 會改成全形）: {t[:40]!r}")
         if collections.Counter(PLACEHOLDER_RE.findall(o)) != collections.Counter(PLACEHOLDER_RE.findall(t)):
@@ -61,6 +66,8 @@ def cmd_validate(args) -> int:
             soft.append(f"[{e['index']}] {loc} 富文本標籤不一致: {TAG_RE.findall(o)} → {TAG_RE.findall(t)}")
         if o.count("\n") != t.count("\n"):
             soft.append(f"[{e['index']}] {loc} 行數 {o.count(chr(10)) + 1}→{t.count(chr(10)) + 1}")
+        if "\r\n" in o and "\n" in t and "\r\n" not in t:
+            soft.append(f"[{e['index']}] {loc} 原文用 \\r\\n 換行、譯文只有 \\n（import 會照譯文寫入）")
     visible = [e for e in strings if not e.get("translated") and e["context"] not in ("memo", "label_memo")
                and JP.search(e["original"])]
     print(f"\n檢查：{len(hard)} 個必須處理、{len(soft)} 個警告；玩家看得到但仍是日文 {len(visible)} 條")
@@ -82,6 +89,7 @@ def cmd_validate(args) -> int:
 
 def cmd_import(args) -> int:
     data_dir = find_data_dir(args.data)
+    rules = load_rules(args.rules)
     script = _load_script(args.translation)
     by_source: dict[str, list[dict]] = collections.defaultdict(list)
     for e in script["strings"]:
@@ -91,8 +99,7 @@ def cmd_import(args) -> int:
         print("沒有任何譯文，不產生檔案")
         return 0
     out_root = args.output / data_dir.name
-    applied = changed_tables = 0
-    stale = 0
+    applied = changed_objs = stale = 0
     warnings: list[str] = []
     written: list[Path] = []
     wanted_assets = sorted({s.split("#", 1)[0] for s in by_source})
@@ -102,20 +109,18 @@ def cmd_import(args) -> int:
             print(f"✗ 找不到 {path}")
             return 1
         env = load_env(path)
+        bundle = env_is_bundle(env)
         file_changed = False
         for table in iter_tables(env):
-            entries = by_source.get(f"{rel}#{table.name}")
+            src = table_source(rel, inner_name(table.obj) if bundle else None, table.name)
+            entries = by_source.get(src)
             if not entries:
                 continue
-            # 原文必須仍然對得上（stale 檢查）：重新導出這張表的 original 對照
-            current = {e["location"]: e["original"] for e in entries_for_table(f"{rel}#{table.name}", table, Rules(default_context="x"))}
+            current = {e["location"]: e["original"] for e in entries_for_table(src, table, Rules(default_context="x"))}
             table_changed = False
             for e in entries:
                 cur = current.get(e["location"])
-                if cur is None:
-                    # 規則可能不同（例如 memo 沒被預設規則抓到），直接用 apply 的比對
-                    pass
-                elif cur != e["original"]:
+                if cur is not None and cur != e["original"]:
                     stale += 1
                     continue
                 ok, warn = apply_entry(table, e["location"], e["translated"])
@@ -127,14 +132,37 @@ def cmd_import(args) -> int:
             if table_changed:
                 table.data.m_Script = table.dump()
                 table.data.save()
-                changed_tables += 1
+                changed_objs += 1
+                file_changed = True
+        for mbo in iter_monobehaviours(env, rules, data_dir):
+            src = mb_source(rel, mbo.inner if bundle else None, mbo.cls, mbo.path_id)
+            entries = by_source.get(src)
+            if not entries:
+                continue
+            current = {e["location"]: e["original"] for e in entries_for_mb(src, mbo, rules)}
+            obj_changed = False
+            for e in entries:
+                cur = current.get(e["location"])
+                if cur is not None and cur != e["original"]:
+                    stale += 1
+                    continue
+                ok, warn = apply_mb_entry(mbo, e["location"], e["translated"])
+                if warn:
+                    warnings.append(f"{src} {warn}")
+                if ok:
+                    applied += 1
+                    obj_changed = True
+            if obj_changed:
+                mbo.save()
+                changed_objs += 1
                 file_changed = True
         if file_changed:
             dst = out_root / rel
             dst.parent.mkdir(parents=True, exist_ok=True)
-            dst.write_bytes(env.file.save())
+            print(f"存回 {rel}（{'bundle，LZ4 重新壓縮，需要幾十秒' if bundle else 'SerializedFile'}）…")
+            dst.write_bytes(save_env(env))
             written.append(dst)
-    print(f"套用 {applied} 條譯文到 {changed_tables} 張表；原文已變、跳過 {stale} 條")
+    print(f"套用 {applied} 條譯文到 {changed_objs} 個物件；原文已變、跳過 {stale} 條")
     for w in warnings[:20]:
         print("  ⚠", w)
     if len(warnings) > 20:
@@ -166,7 +194,6 @@ def cmd_verify(args) -> int:
         if not files:
             print("輸出目錄沒有任何檔案（沒有變動），無需驗證 ✓")
             return 0
-        # 也接受直接給 *_Data 或其父層
         try:
             out_root = find_data_dir(Path(args.patched))
         except SystemExit:
@@ -176,6 +203,7 @@ def cmd_verify(args) -> int:
     errors: list[str] = []
     warns: list[str] = []
     checked = 0
+    known = {p.relative_to(data_dir).as_posix() for p in asset_files(data_dir)}
     for rel_path in sorted(out_root.rglob("*")):
         if not rel_path.is_file():
             continue
@@ -184,28 +212,14 @@ def cmd_verify(args) -> int:
         if not orig_path.exists():
             errors.append(f"{rel}: 原始資料裡沒有這個檔案")
             continue
+        if "/Managed/" in f"/{rel}" and rel.endswith(".dll"):
+            continue  # package 的 dll_strings 步驟產物（patch_dll_strings.py 自己回讀驗證）
+        if rel not in known and not rel.endswith((".assets", ".unity3d")):
+            errors.append(f"{rel}: 不是本轉接器會產生的檔案")
+            continue
         checked += 1
         a, b = load_env(orig_path), load_env(rel_path)
-        oa = {o.path_id: o for o in a.objects}
-        ob = {o.path_id: o for o in b.objects}
-        if set(oa) != set(ob):
-            errors.append(f"{rel}: 物件集合不同（原 {len(oa)}，後 {len(ob)}）")
-            continue
-        ta = {t.obj.path_id: t for t in iter_tables(a)}
-        tb = {t.obj.path_id: t for t in iter_tables(b)}
-        for pid, x in oa.items():
-            y = ob[pid]
-            if x.type.name != y.type.name:
-                errors.append(f"{rel}#{pid}: 型別 {x.type.name} → {y.type.name}")
-                continue
-            if pid in ta:
-                t1, t2 = ta[pid], tb.get(pid)
-                if t2 is None:
-                    errors.append(f"{rel}#{t1.name}: 導入後不再是合法的 JSON 表")
-                    continue
-                _verify_table(rel, t1, t2, _rule_fields(rules, t1), errors, warns)
-            elif x.get_raw_data() != y.get_raw_data():
-                errors.append(f"{rel}#{pid} ({x.type.name}): 非文字物件的內容改變了")
+        _verify_container(rel, a, b, rules, data_dir, errors, warns)
     print(f"檢查 {checked} 個檔案：{len(errors)} 個錯誤，{len(warns)} 個警告")
     for e in errors[:30]:
         print("  ✗", e)
@@ -216,6 +230,66 @@ def cmd_verify(args) -> int:
         return 1
     print("✓ 沒有結構性問題")
     return 0
+
+
+def _verify_container(rel: str, a, b, rules: Rules, data_dir: Path, errors: list[str], warns: list[str]) -> None:
+    sfa = {sf.name: sf for sf in serialized_files(a)}
+    sfb = {sf.name: sf for sf in serialized_files(b)}
+    if set(sfa) != set(sfb):
+        errors.append(f"{rel}: 內部檔集合不同 {sorted(sfa)} vs {sorted(sfb)}")
+        return
+    ra, rb = resource_digests(a), resource_digests(b)
+    if set(ra) != set(rb):
+        errors.append(f"{rel}: 資源區塊集合不同 {sorted(ra)} vs {sorted(rb)}")
+    else:
+        for name in ra:
+            if ra[name] != rb[name]:
+                errors.append(f"{rel}: 資源區塊 {name} 內容改變（{ra[name][0]:,} → {rb[name][0]:,}）")
+    ta = {(inner_name(t.obj), t.obj.path_id): t for t in iter_tables(a)}
+    tb = {(inner_name(t.obj), t.obj.path_id): t for t in iter_tables(b)}
+    mba = {(m.inner, m.path_id): m for m in iter_monobehaviours(a, rules, data_dir)}
+    mbb = {(m.inner, m.path_id): m for m in iter_monobehaviours(b, rules, data_dir, classes=script_classes(b))}
+    for name, fa in sfa.items():
+        fb = sfb[name]
+        oa, ob = fa.objects, fb.objects
+        label = f"{rel}[{name}]" if len(sfa) > 1 else rel
+        if set(oa) != set(ob):
+            errors.append(f"{label}: 物件集合不同（原 {len(oa)}，後 {len(ob)}）")
+            continue
+        for pid, x in oa.items():
+            y = ob[pid]
+            if x.type.name != y.type.name:
+                errors.append(f"{label}#{pid}: 型別 {x.type.name} → {y.type.name}")
+                continue
+            key = (name, pid)
+            if key in ta:
+                t2 = tb.get(key)
+                if t2 is None:
+                    errors.append(f"{label}#{ta[key].name}: 導入後不再是合法的 JSON 表")
+                    continue
+                _verify_table(label, ta[key], t2, _rule_fields(rules, ta[key]), errors, warns)
+            elif key in mba:
+                m2 = mbb.get(key)
+                if m2 is None:
+                    errors.append(f"{label}#{pid}: 導入後讀不到 {mba[key].cls}")
+                    continue
+                _verify_mb(label, mba[key], m2, rules, errors, warns)
+            elif x.get_raw_data() != y.get_raw_data():
+                errors.append(f"{label}#{pid} ({x.type.name}): 非文字物件的內容改變了")
+
+
+def _verify_mb(label: str, m1, m2, rules: Rules, errors: list[str], warns: list[str]) -> None:
+    allowed = [(r.regex(), r) for r in rules.monobehaviours.get(m1.cls, []) if not r.skip]
+    diffs = tree_diff(m1.tree, m2.tree)   # 結構（鍵集合／陣列長度）壞掉時 tree_diff 只回一筆，下面會判成不在規則內；葉節點差異數不設上限（RJ01657316 合法差異 2774 條）
+    for loc, v1, v2 in diffs:
+        rules_here = [r for rx, r in allowed if rx.match(loc)]
+        if not rules_here or not isinstance(v1, str) or not isinstance(v2, str):
+            errors.append(f"{label}#{m1.path_id} {m1.cls} {loc}: 不在規則內的欄位被改了（{str(v1)[:30]!r} → {str(v2)[:30]!r}）")
+            continue
+        if collections.Counter(PLACEHOLDER_RE.findall(v1)) != collections.Counter(PLACEHOLDER_RE.findall(v2)):
+            errors.append(f"{label}#{m1.path_id} {loc}: <param#…> 佔位符不一致")
+        if collections.Counter(TAG_RE.findall(v1)) != collections.Counter(TAG_RE.findall(v2)):
+            warns.append(f"{label}#{m1.path_id} {loc}: 富文本標籤不一致")
 
 
 def _verify_table(rel: str, t1, t2, allowed: dict[str, list], errors: list[str], warns: list[str]) -> None:

@@ -1,0 +1,63 @@
+{
+  "_doc": "騙され呑みニケーション（RJ01657316，おうち開発室）v1.0.2。Unity 6000.4.1f1 Mono、單檔 data.unity3d。文本不在 JSON 表，而在 resources.assets 的 ScriptableObject TopicCatalog（mTopics[62] → mLines[1510]），UI 標籤在 TextMeshProUGUI.m_text。",
+  "_never_export": [
+    "TopicCatalog.mCsvFolder（編輯器路徑）、mTopics[*].mTopicId／mIconName（鍵與圖示名）",
+    "mLines[*].mLabel／mJumpTo（跳躍標籤）、mPortrait（立繪資產鍵，例：シーン1_キャラクター_ポーズ1_顔_デフォルトA）、mVoice（語音鍵 b10_3／嚥下）",
+    "mType 2 的 mText（unlock:topic_001 之類的指令）、mType 3（演出列，mText 空）",
+    "ImageCatalog／AudioCatalog／SlotLabel／GenreSlotTable／ViewManager 等的日文字串全是資產鍵名"
+  ],
+  "tables": {},
+  "monobehaviours": {
+    "TopicCatalog": [
+      {
+        "path": "mTopics[*].mLabel",
+        "context": "choice",
+        "_doc": "話題選單標題（導入／女子高1…）"
+      },
+      {
+        "path": "mTopics[*].mLines[*].mSpeaker",
+        "context": "speaker",
+        "_doc": "名字牌：後輩／あなた／店員"
+      },
+      {
+        "path": "mTopics[*].mLines[*].mText",
+        "context": "dialog",
+        "speaker_from": "mSpeaker",
+        "when": {
+          "mType": [
+            0
+          ]
+        }
+      },
+      {
+        "path": "mTopics[*].mLines[*].mText",
+        "context": "choice",
+        "when": {
+          "mType": [
+            1
+          ]
+        },
+        "_doc": "選項文字，mJumpTo 是跳躍目標不動"
+      }
+    ],
+    "TextMeshProUGUI": [
+      {
+        "path": "m_text",
+        "context": "ui",
+        "_doc": "場景與 prefab 的 UI 標籤（同意畫面、系統設定、デバッグ用…）；只導出含日文的"
+      }
+    ]
+  },
+  "dll_strings": {
+    "_doc": "ProjectRuntime.dll 寫死的顯示文字與『拿台詞原文做比對』的常數（scan_dll_strings.py 找到），package 時由 patch_dll_strings.py 原地覆蓋（譯文 UTF-16 長度不得超過原文）。IsIntroBlackoutFadeLine 用 Contains 比對開場第四句：這兩個常數必須是該句譯文的子字串——改譯文要一起改。",
+    "ProjectRuntime.dll": {
+      "同じサークルに所属する": "他們同屬一個社團",
+      "先輩と後輩": "學長和學妹",
+      "あなた": "你",
+      "（さて… 何について話そうかな？）": "（那麼…要聊些什麼呢？）",
+      "（さて… 何を注文しようかな？）": "（那麼…要點些什麼呢？）",
+      "（まだ挿入できるほど濡れていないみたいだ…）": "（好像還沒濕到能插進去…）",
+      "酒を口に含む": "含一口酒"
+    }
+  }
+}

@@ -49,6 +49,37 @@
 - **環境依賴要在第一版就宣告**：UnityPy 一開始是臨時裝的，後來才補 `python_env` + `requirements.txt` + `setup_env.sh`。
   新引擎需要套件時，從一開始就走宣告路線，專案才搬得到別的機器。
 
+## Unity 第二例：單檔 bundle／Mono／ScriptableObject 文本（RJ01657316，2026-09-12）
+
+- **「有轉接器」不等於「這款能跑」**：同樣是 Unity 6，第二款遊戲的三個假設全部不同（散檔→單檔 `data.unity3d`、IL2CPP→Mono、
+  JSON TextAsset→`TopicCatalog` ScriptableObject），`detect` 連目錄都不認。轉接器要把「容器」「文本來源」「腳本後端」三件事分開設計，
+  每一層都用資料目錄的實際長相判斷，不要寫死檔名。
+- **Mono 建置的 type tree 直接從 `Managed/*.dll` 產生**（TypeTreeGeneratorAPI），比 IL2CPP 的錨點法可靠得多：119 個 MonoBehaviour
+  read→save 後 raw 全部相同，一次就過。IL2CPP 也能用（`GameAssembly.dll`＋`global-metadata.dat`），下次 Unity 先試 type tree 再想錨點。
+  例外：少數類別（`ImageCatalog`／`AudioCatalog`）產生的 type tree 讀不到底（`read_str out of bounds`）——只讀規則涵蓋的類別，其他一律 raw 比對。
+- **MonoScript 常在別的內部檔**（bundle 裡是 `globalgamemanagers.assets`），自己解 `m_Script` 指標會漏掉 external；交給 UnityPy 的 PPtr 解析，
+  而且要在掛 type tree 產生器**之前**（或暫時拿掉）讀，否則 `obj.read()` 會走 type tree 而炸在那些讀不到底的類別。
+- **bundle 解壓後比檔案大十倍**：164 MB 的 LZ4HC bundle 內含 1.7 GB 的 `resources.assets.resS`（未壓縮貼圖），UnityPy 全放記憶體；
+  比對資源區塊要對 memoryview 做雜湊，不要複製 bytes。LZ4 重存約 40 秒、165 MB；UnityPy 沒有 LZ4HC 編碼器，`packer="original"` 會撞 NotImplemented，
+  明確用 `"lz4"`（同一種區塊格式，Unity 讀得懂——V0 變體實機存活 20 秒證實）。
+- **ScriptableObject 裡「看起來像文字」的欄位大半是鍵**：`mPortrait`（立繪鍵）、`mVoice`（語音鍵）、`mJumpTo`、`mLabel`、`mIconName`，
+  還有整個 `ImageCatalog`／`AudioCatalog`。規則用 `path` 明確指定要導出的葉節點，並用 `when`（`mType` 0/1）分出台詞與選項；
+  `mType 2` 的 `mText` 是 `unlock:topic_001` 指令，`mType 3` 是演出列。導出後 grep 一次鍵名樣式（`シーン\d_`、`^[a-z]\d{2}_\d$`）當 G3 抽樣。
+- **內嵌 Font 不一定有 CJK**：這款只內嵌 LiberationSans／PerfectDOSVGA437，三套日文 TMP 靜態圖集（7129 字＝JIS 一二級）對 Big5 常用字只有 81.7%
+  （缺 你／她／嗎／說／溫／戶…）。對策改成「注入字型」：把別款遊戲抽出的 NotoSansJP OTF（`extract_font.py`）寫進 LiberationSans Font 物件的 `m_FontData`，
+  Unity 內建的動態備援 `LiberationSans SDF - Fallback` 就變成 CJK 動態字型，再掛成 TMP Settings 全域備援；靜態圖集一個位元組都不動。
+  這是比「靜態圖集動態化＋inline atlas（+32 MB）」小得多的單一變數。Noto 對 Big5 常用字 97.7%，剩下的 122 字（嗯／喔…）沿用 `charset_map.json` 替字。
+- **Windows 上 UnityPy 開著的散檔不能 unlink**（PermissionError），暫存檔留給系統清；bundle 因為整檔讀進記憶體沒這問題。
+- **一棒制在同機測試也要守**：實機端本地做「假譯文 smoke」（12 條含 你她嗎 的假譯文 + 字型注入）驗證管線與 bundle 可開，用的是 `script.json` 的副本，
+  `exported/` 一個位元組都沒動，交接包裡的東西仍是翻譯端的。
+
+- **程式碼會拿台詞原文當開關**（RJ01657316，2026-09-15）：翻完後整場黑畫面，二分證明 bundle 沒問題、只翻 `TopicCatalog` 就黑；
+  DLL 裡 `mText.Contains("同じサークルに所属する")` 決定開場黑幕何時淡出。同款還有 speaker 分色用 `== "あなた"`、三句提示台詞直接寫死。
+  對策是原地改 DLL 字串堆（`scan_dll_strings.py` 找、`patch_dll_strings.py` 覆蓋，新字串不能比原字串長），交付物多一個 DLL。
+  **G3 抽樣清單要加一項：掃遊戲程式的字串常數，找拿顯示文字做比對的地方**——不是 Unity 專屬，Wolf／RPG Maker 事件腳本用字串比較分支也是同一類。
+- **package 之後要驗交付檔內容，不是只驗 translated/**：font_inject 的 `--base` 路徑算錯，從原版注入字型蓋掉譯文，verify 早就過了、交付檔卻是日文。
+  verify 綁在 import 後、字型／DLL 步驟在 package 時才跑，中間沒人再看一眼。
+
 ## 兩站接力（實機端 Windows ↔ 翻譯端 dgxluna，2026-09-12）
 
 - **碰遊戲檔的步驟與碰模型的步驟可以完全分開**：translate／fix_text／check_codes／validate 只讀 `exported/` + sidecar + profile，
@@ -69,6 +100,53 @@
   `list2cmdline` 印的 `C:\Users\…` 沒引號，貼回 Git Bash 反斜線會被吃掉（含反斜線／空白的參數一律雙引號）。
 - **測試不能碰真實設定**：`mock.patch.dict(os.environ, {"AGT_HANDOFF_DIR": ""})` 原本無效（空字串不覆蓋），測試交接包真的被複製到 Google Drive。
   環境變數設成空字串現在也算覆蓋。
+
+## 翻譯端（dgxluna，RJ01657316 首次兩站接力，2026-09-12）
+
+- **glossary 的備註符號是 `#`，`//` 會被當成譯文**：GalTransl 的 `CGptDict` 把 `->` 與 `#` 一律換成 TAB 再切三欄，
+  完全不認 `//`。`センパイ->學長 // 全篇統一` 解析出的譯文是 `學長 // 全篇統一`，整串註解被塞進 prompt 的 `[Glossary]`。
+  本專案的文件（`CLAUDE.md`、`docs/translation-quality.md`）原本就寫錯 `//`，而 RJ01483219 沒有 glossary.txt，
+  所以自動載入這條路是**第一次真的被走到**才爆出來。對策：寫完 glossary 一定用 `CGptDict` 載入印 `replace_word` 確認；
+  純註解行用 `#` 開頭且**不能含 `->`**（含了會產生 `search_word` 為空字串的條目，空字串比對到任何文字，每個批次都被汙染）。
+- **`fix_text` 的 opencc `t2jp` 退路在 dgxluna 上永遠不生效**：nllb-env 的 opencc 沒有 `t2jp.json`，
+  `except Exception` 把 `FileNotFoundError` 吃掉，一律印 `t2jp 自動: 0 種`。繁→日字形（值→値、啟→啓）只能靠
+  `charset_map.json` 人工帶。**「自動 0 種」不等於「沒缺字」**，要看後面的缺字清單。
+- **`\r\n` 不是本 repo 在處理的**：`translate.py`／`fix_text.py`／`core/codes.py`／vendor `import_script.py` 全都只比
+  `count("\n")`，CRLF 與 LF 行數相同，所以「原文 CRLF、譯文只有 LF」**不會有任何警告**（#1 交接包與 NOTES 原本都寫成
+  「validate 會警告」，是錯的）。真正保住 CRLF 的是 `GalTransl/Backend/SakuraTranslate.py`：送出前把 `\r\n`／`\n`
+  攤平成字面兩字元 `\n`，回來後依原文用哪一種還原。實測可靠，但每個專案還是要量一次（模型多吐／少吐一個標記就多一行少一行）。
+- **只有 4 種原文的 1329 條名字牌不要送模型**：`context=speaker` 直接用固定對照填完，翻譯量從 2840 降到 1511，
+  也消掉「名字牌與對話裡譯名不一致」的風險。profile 的 `speaker` context 說明本來就這樣建議。
+- **`--limit` 是「去重後要送模型的條數」**，不是原始條數：套用順序是 `should_translate` → `--filter` → 翻譯記憶 → 去重 → `--limit`。
+  先填好名字牌再下 `--filter`，篩出來的數字會跟著變（58 → 31）。
+- **smoke 樣本要自己挑到涵蓋所有換行形狀**：HANDOFF 給的 `--limit 6 --filter 'level0/TextMeshProUGUI'` 只會拿到前 6 條，
+  剛好漏掉唯一一條結尾單獨 `\n` 的 UI 標籤。改成列舉 path_id（`@(131|132|133|134|139|140)#`）才測得到。
+- **訊息窗排版要量原文，不能只看 `line_count` 警告**：原文的「最多幾行、單行最寬幾個半形」是開發者自己排給訊息窗的，
+  就是上限（RJ01657316：3 行／49 寬，235 條原文用滿 3 行）。模型會超——5 條吐成 4 行、6 條單行最寬 56。
+  `line_count` 只比行數，**抓不到「行數沒變但某行變寬」**。對策：G8 量「最大行數」與「單行最大寬」兩個數字，
+  超出的用標點優先重排壓回去（不改用詞就排得進：先依標點切塊、塊跟著標點留在塊尾，所以行首不會是逗號；
+  塊本身超寬才硬切，且不在標點前切）。
+- **opencc `s2twp` 會過度轉換，而且每次 `fix_text` 都會再犯一次**：`貞操觀念的` → `貞操觀唸的`
+  （`貞操觀念` 單獨轉卻不會，看上下文）。事後手改沒用，下次跑 fix_text 又被轉回去。
+  對策：放進 `charset_map.json` 的**詞級**鍵（多字元鍵），它跑在 step 7、opencc 在 step 1，擋得住。
+  s2twp 也會**漏轉**：`想象` 沒變成 `想像`（9 條）。G8 要掃一份大陸用詞／過度轉換清單。
+- **`fix_text` 的統計數字不是淨變更數**：`簡繁正規化 7`／`缺字替換 6` 是各步驟碰過的條目數；
+  opencc 把 `恩` 轉成 `嗯`、替字表再換回 `恩`，一來一回淨變更 0。要確認有沒有真的變，就連跑兩次 diff
+  （RJ01657316 實測第二次輸出逐位元組相同，已收斂）。
+- **模型會留下日文敬稱**：`後輩ちゃん` 有 41 條翻成「學妹醬」、97 條翻成「學妹」。glossary 寫了 `後輩ちゃん->學妹`
+  也只是建議，不是強制。G8 要統計同一原文的譯法分布之外，也要掃「醬／桑／君」這類殘留敬稱。
+- **`agt detect <handoff_dir>/<game>` 找不到交接包**（已修）：`core/handoff.pick_latest` 原本用 `glob("*.zip")` 只看當層，
+  但 `handoff pack` 是複製到 `<handoff_dir>/<game>/handoff/`，剛好差一層（同函式的 `_game_hints` 用的卻是 `rglob`，
+  所以遊戲特徵找得到、交接包找不到）。CLAUDE.md 第 6 節寫「收方 `agt detect <那個資料夾>`」，是文件與行為不一致。
+  修法：當層找不到才往下找一層。**只找一層**——`<handoff_dir>` 底下是多個遊戲，整棵 rglob 會把別款遊戲的包混進同一個候選清單，
+  `unpack` 又是「取 seq 最大的」，混到別款就會收錯專案。目錄本身是交接包或專案時仍優先當它自己，不掃子目錄。
+- **`unpack` 前先切好分支，repo 不同步警告就不會出現**：manifest 記的 `repo_head` 是實機端 pack 時的 HEAD
+  （這次在 `feat/unity-bundle-mono`，不是 main）。在 main 上 unpack 會警告；先 `git fetch && git checkout <分支>` 再收就乾淨。
+- **有些句子翻完就不再自由了**（2026-09-15 收尾補）：被程式碼 `Contains`／`==` 綁住的台詞，譯文成了程式的一部分。
+  潤稿、重譯、換用詞之前先看 `engines/<x>/rules/<專案名>.json` 的 `dll_strings`：那裡列的句子改了，
+  DLL 常數要一起改，而且**新字串的 UTF-16 長度不得超過日文原字串**（原地覆蓋字串堆，不能變長）。
+  翻譯端改了這種句子而沒說，實機端不會發現——verify 過、import 過，遊戲卻在那一幕卡住。
+  對策：把受約束的 index 寫進 `HANDOFF.md`，並在 `glossary.txt` 用註解行標記。
 
 ## 工具鏈事故
 
