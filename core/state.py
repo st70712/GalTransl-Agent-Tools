@@ -59,6 +59,15 @@ def set_handoff(path: Path, block: dict[str, Any]) -> None:
     save_state(path, st)
 
 
+def update_handoff(path: Path, fields: dict[str, Any]) -> None:
+    """把 ``fields`` 併進既有的 ``handoff`` 區塊（其餘欄位不動）。"""
+    st = load_state(path)
+    block = dict(st.get("handoff") or {})
+    block.update(fields)
+    st["handoff"] = block
+    save_state(path, st)
+
+
 def merge_states(local: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
     """unpack 時合併兩站的 agt.json：engine／handoff 取對方的，每個關卡取時間較新的，history 聯集。"""
     out: dict[str, Any] = {**local, **incoming}

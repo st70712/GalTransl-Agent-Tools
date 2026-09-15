@@ -7,7 +7,6 @@ glossary、字型字元集、HANDOFF.md、logs）。絕不放 original/、extrac
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import shutil
@@ -19,7 +18,7 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from . import PROJECTS_DIR, REPO_ROOT, config, state
+from . import PROJECTS_DIR, REPO_ROOT, config, fsutil, state
 from .adapter import Project
 
 FORMAT = 1
@@ -54,6 +53,18 @@ class Intake:
 
 
 @dataclass
+class BundleDigest:
+    """整個交接包 zip 的大小與 sha256——「是不是同一包」的唯一判準。
+
+    zip 內的 ``agt.json`` 寫不進 zip 自己的雜湊（雞生蛋），所以整包 digest 只能活在 zip 外面三個地方：
+    本機 ``agt.json`` 的 handoff 區塊、共用資料夾的 ``.sha256`` 旁檔、送給另一站的通知訊息。
+    收方拿訊息裡的值比對本地檔案，就能判定 Drive／rclone 是否還沒同步完（見 docs/two-site.md §6b）。
+    """
+    size: int
+    sha256: str
+
+
+@dataclass
 class PackResult:
     bundle: Path
     seq: int
@@ -61,6 +72,8 @@ class PackResult:
     files: list[str]
     copied_to: Path | None = None
     warnings: list[str] = field(default_factory=list)
+    size: int = 0
+    sha256: str = ""
 
 
 @dataclass
@@ -80,20 +93,27 @@ def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _sha256(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
+def digest_bundle(path: Path) -> BundleDigest:
+    """算出整個交接包的 size + sha256。"""
+    return BundleDigest(size=path.stat().st_size, sha256=fsutil.sha256_file(path))
 
 
 def repo_info() -> dict[str, Any]:
-    """本機 repo 的 HEAD 與是否有未提交變更（git 不可用時都是 None）。"""
+    """本機 repo 的 HEAD、分支名與是否有未提交變更（git 不可用時都是 None）。
+
+    呼叫端一律用 ``.get("branch")``：``branch`` 是後來才加的，既有測試的 mock 沒有這個鍵。
+    """
     try:
         head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True)
         status = subprocess.run(["git", "status", "--porcelain"], cwd=REPO_ROOT, capture_output=True, text=True)
+        branch = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=REPO_ROOT,
+                                capture_output=True, text=True)
     except OSError:
-        return {"head": None, "dirty": None}
+        return {"head": None, "dirty": None, "branch": None}
     if head.returncode != 0 or status.returncode != 0:
-        return {"head": None, "dirty": None}
-    return {"head": head.stdout.strip(), "dirty": bool(status.stdout.strip())}
+        return {"head": None, "dirty": None, "branch": None}
+    return {"head": head.stdout.strip(), "dirty": bool(status.stdout.strip()),
+            "branch": branch.stdout.strip() if branch.returncode == 0 else None}
 
 
 def bundle_name(game: str, seq: int, to: str, when: datetime | None = None) -> str:
@@ -165,7 +185,7 @@ def pack(p: Project, to: str, *, from_site: str, out_dir: Path | None = None,
     manifest: dict[str, Any] = {
         "format": FORMAT, "game": p.name, "seq": seq, "from_site": from_site, "to_site": to,
         "packed_at": now.strftime("%Y-%m-%d %H:%M:%S"), "host": socket.gethostname(), "engine": eng,
-        "repo_head": info["head"], "repo_dirty": info["dirty"], "files": {},
+        "repo_head": info["head"], "repo_branch": info.get("branch"), "repo_dirty": info["dirty"], "files": {},
     }
     out_dir = out_dir or (p.root / "handoff")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -173,9 +193,13 @@ def pack(p: Project, to: str, *, from_site: str, out_dir: Path | None = None,
     with zipfile.ZipFile(bundle, "w", zipfile.ZIP_DEFLATED) as zf:
         for abs_path, arc in files:
             data = abs_path.read_bytes()
-            manifest["files"][arc] = {"size": len(data), "sha256": _sha256(data)}
+            manifest["files"][arc] = {"size": len(data), "sha256": fsutil.sha256_bytes(data)}
             zf.writestr(arc, data)
         zf.writestr(MANIFEST, json.dumps(manifest, ensure_ascii=False, indent=2))
+
+    # 整包 digest 只能在 zip 封起來之後算（見 BundleDigest）；記進本機 agt.json 讓 handoff notify 之後還拿得到。
+    digest = digest_bundle(bundle)
+    state.update_handoff(p.state_path, {"bundle_sha256": digest.sha256, "bundle_size": digest.size})
 
     copied_to: Path | None = None
     cfg_dir = config.load_config().get("handoff_dir", "").strip()
@@ -189,7 +213,7 @@ def pack(p: Project, to: str, *, from_site: str, out_dir: Path | None = None,
             copied_to = dst_dir / name
             shutil.copy2(bundle, copied_to)
     return PackResult(bundle=bundle, seq=seq, to=to, files=[arc for _, arc in files],
-                      copied_to=copied_to, warnings=warnings)
+                      copied_to=copied_to, warnings=warnings, size=digest.size, sha256=digest.sha256)
 
 
 # -- classify / unpack ----------------------------------------------------------
@@ -366,7 +390,7 @@ def unpack(src: Path, projects_dir: Path | None = None, *, game: str | None = No
     written: list[str] = []
     for rel, data in members.items():
         expect = (manifest.get("files") or {}).get(rel, {}).get("sha256")
-        if expect and expect != _sha256(data):
+        if expect and expect != fsutil.sha256_bytes(data):
             raise HandoffError(f"{rel} 的 sha256 與 manifest 不符，交接包可能傳輸不完整")
         dst = p.root / rel
         if rel == "agt.json":

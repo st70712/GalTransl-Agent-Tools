@@ -1,4 +1,4 @@
-"""跨平台檔案系統小工具（純標準庫）：venv 直譯器路徑、目錄連結（symlink／Windows junction）、UTF-8 標準輸出。
+"""跨平台檔案系統小工具（純標準庫）：venv 直譯器路徑、目錄連結（symlink／Windows junction）、sha256 雜湊、UTF-8 標準輸出。
 
 Windows 上建 symlink 需要開發人員模式或系統管理員；沒有的話退回 NTFS junction（``mklink /J``，不需權限，
 但 ``Path.is_symlink()`` 認不得 junction），所以這裡統一用 :func:`is_link` / :func:`remove_link` 處理兩種連結。
@@ -6,6 +6,7 @@ Windows 上建 symlink 需要開發人員模式或系統管理員；沒有的話
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import stat
@@ -85,6 +86,26 @@ def replace_dir_with_link(target: Path, link: Path, *, rmtree_ok: bool) -> str:
     elif link.exists():
         raise FileExistsError(f"{link} 已存在且不是目錄")
     return link_dir(target, link)
+
+
+SHA256_CHUNK = 1 << 20
+
+
+def sha256_bytes(data: bytes) -> str:
+    """位元組內容的 sha256 十六進位字串。"""
+    return hashlib.sha256(data).hexdigest()
+
+
+def sha256_file(path: Path, chunk_size: int = SHA256_CHUNK) -> str:
+    """檔案的 sha256；串流讀取，不把整個檔案吃進記憶體。
+
+    注意：在 Google Drive 桌面版的佔位檔上呼叫會觸發即時下載（交接包只有幾百 KB，數秒）。
+    """
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(chunk_size), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def utf8_stdio() -> None:
