@@ -239,6 +239,97 @@ class MergeStates(unittest.TestCase):
         self.assertEqual(m["handoff"]["seq"], 2)
 
 
+def _rewrite_zip(src: Path, dst: Path, changes: dict[str, bytes]) -> Path:
+    """複製一個 zip，換掉指定成員的內容（manifest 不動 → 模擬「內容與 manifest 對不上」）。"""
+    with zipfile.ZipFile(src) as zin, zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zout:
+        for name in zin.namelist():
+            zout.writestr(name, changes.get(name, zin.read(name)))
+    return dst
+
+
+class BundleIntegrity(unittest.TestCase):
+    """Drive／rclone 半同步的防線：整包 digest、成員 pre-flight、--force 不得略過完整性。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp(prefix="agt-test-integrity-"))
+        cls.ws = _make_project(cls.tmp / "ws", "demo")
+        with mock.patch.object(handoff, "repo_info", lambda: {"head": "abc", "dirty": False}), \
+             mock.patch.dict(os.environ, {"AGT_HANDOFF_DIR": ""}):
+            cls.packed = handoff.pack(cls.ws, "translator", from_site="workstation")
+        cls.bundle = cls.packed.bundle
+        cls.tr_projects = cls.tmp / "tr"
+        cls.tr = handoff.unpack(cls.bundle, cls.tr_projects).project
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_check_ok(self):
+        c = handoff.check_bundle(self.bundle)
+        self.assertTrue(c.ok, c.problems)
+        self.assertEqual((c.digest.size, c.digest.sha256), (self.packed.size, self.packed.sha256))
+
+    def test_check_expect_mismatch_says_not_same_bundle(self):
+        c = handoff.check_bundle(self.bundle, expect_sha256="0" * 64, expect_size=self.packed.size)
+        self.assertFalse(c.ok)
+        self.assertTrue(any("不是同一包" in q for q in c.problems), c.problems)
+        msg = handoff.integrity_message(self.bundle, c.problems, 1)
+        self.assertIn("--force", msg)          # 訊息要主動把人推離 --force
+        self.assertIn("晚點再收", msg)          # 並直接寫好該回報對方的話
+
+    def test_check_expect_smaller_says_still_transferring(self):
+        c = handoff.check_bundle(self.bundle, expect_size=self.packed.size + 10_000)
+        self.assertFalse(c.ok)
+        self.assertTrue(any("還在傳" in q for q in c.problems), c.problems)
+
+    def test_truncated_zip_reads_as_sync_error(self):
+        half = self.tmp / "half.zip"
+        half.write_bytes(self.bundle.read_bytes()[: self.packed.size // 2])
+        for call in (lambda: handoff.check_bundle(half),
+                     lambda: handoff.unpack(half, self.tr_projects)):
+            with self.assertRaises(handoff.HandoffError) as cm:
+                call()
+            self.assertIn("同步", str(cm.exception))      # 不是 BadZipFile traceback
+
+    def test_unpack_preflight_does_not_write(self):
+        tampered = _rewrite_zip(self.bundle, self.tmp / "tampered.zip",
+                                {"exported/script.json": b'{"broken": true}'})
+        before = self.tr.script.read_bytes()
+        backups = sorted(q.name for q in self.tr.exported.glob("script.backup-*.json"))
+        with self.assertRaises(handoff.HandoffError) as cm:
+            handoff.unpack(tampered, self.tr_projects)
+        self.assertIn("exported/script.json", str(cm.exception))
+        self.assertEqual(self.tr.script.read_bytes(), before)
+        # 備份發生在寫入前：沒有新備份，就證明真的在落地前就攔下了
+        self.assertEqual(sorted(q.name for q in self.tr.exported.glob("script.backup-*.json")), backups)
+
+    def test_force_does_not_bypass_integrity(self):
+        tampered = _rewrite_zip(self.bundle, self.tmp / "tampered2.zip",
+                                {"exported/script.json": b'{"broken": true}'})
+        with self.assertRaises(handoff.HandoffError):
+            handoff.unpack(tampered, self.tr_projects, force=True)
+
+    def test_missing_hash_is_warning_not_error(self):
+        with zipfile.ZipFile(self.bundle) as zf:
+            man = json.loads(zf.read(handoff.MANIFEST))
+        man["files"].pop("glossary.txt", None)
+        loose = _rewrite_zip(self.bundle, self.tmp / "loose.zip",
+                             {handoff.MANIFEST: json.dumps(man, ensure_ascii=False).encode("utf-8")})
+        c = handoff.check_bundle(loose)
+        self.assertTrue(c.ok, c.problems)                  # format: 0 的舊包要收得進來
+        self.assertTrue(any("glossary.txt" in w for w in c.warnings), c.warnings)
+
+    def test_resolve_by_game_name_finds_shared_dir(self):
+        shared = self.tmp / "drive"
+        (shared / "demo" / "handoff").mkdir(parents=True)
+        dst = shutil.copy2(self.bundle, shared / "demo" / "handoff" / self.bundle.name)
+        with mock.patch.dict(os.environ, {"AGT_HANDOFF_DIR": str(shared)}):
+            self.assertEqual(handoff.resolve_bundle("demo", site="translator"), Path(dst))
+            # 沒有寄給本站的包 → 不篩站點再找一次，仍找得到
+            self.assertEqual(handoff.resolve_bundle("demo", site="workstation"), Path(dst))
+
+
 class AgtCli(unittest.TestCase):
     """agt.py detect 對交接包的來料判斷、翻譯端骨架專案的守門（子行程，PROJECTS_DIR 改到 tmp）。"""
 
@@ -284,6 +375,14 @@ class AgtCli(unittest.TestCase):
         r = self._agt("status", "demo")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("交接: #1", r.stdout)
+
+    def test_handoff_check_cli(self):
+        r = self._agt("handoff", "check", str(self.bundle))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("完整性驗證通過", r.stdout)
+        r = self._agt("handoff", "check", str(self.bundle), "--expect-sha256", "0" * 64)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("不要用", r.stdout + r.stderr)      # 要把對方推離 --force
 
     def test_env(self):
         r = self._agt("env")
