@@ -176,7 +176,7 @@ projects/<game>/    每款遊戲的工作目錄（不進 git）：original/ extr
 - 會改變檔案長度的長度敏感欄位（Wolf `Game.dat` 視窗標題）
 
 反過來：任何「看起來像流程控制」的字串參數，都要先確認它不是顯示文字。
-- **程式碼拿顯示文字當開關**：翻譯前掃遊戲程式的字串常數（Unity Mono：`engines/unity_textasset/vendor/scan_dll_strings.py`），
+**也要反過來查程式**：程式碼會拿顯示文字當開關——翻譯前掃遊戲程式的字串常數（Unity Mono：`engines/unity_textasset/vendor/scan_dll_strings.py`），
   `Contains`／`==`／`StartsWith` 對台詞原文的地方，譯文要跟程式一起改（`rules/<專案名>.json` 的 `dll_strings`），否則像 RJ01657316 那樣整場黑畫面。
 
 ## 10. 何時停下來問使用者

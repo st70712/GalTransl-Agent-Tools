@@ -142,6 +142,11 @@
   `unpack` 又是「取 seq 最大的」，混到別款就會收錯專案。目錄本身是交接包或專案時仍優先當它自己，不掃子目錄。
 - **`unpack` 前先切好分支，repo 不同步警告就不會出現**：manifest 記的 `repo_head` 是實機端 pack 時的 HEAD
   （這次在 `feat/unity-bundle-mono`，不是 main）。在 main 上 unpack 會警告；先 `git fetch && git checkout <分支>` 再收就乾淨。
+- **有些句子翻完就不再自由了**（2026-09-15 收尾補）：被程式碼 `Contains`／`==` 綁住的台詞，譯文成了程式的一部分。
+  潤稿、重譯、換用詞之前先看 `engines/<x>/rules/<專案名>.json` 的 `dll_strings`：那裡列的句子改了，
+  DLL 常數要一起改，而且**新字串的 UTF-16 長度不得超過日文原字串**（原地覆蓋字串堆，不能變長）。
+  翻譯端改了這種句子而沒說，實機端不會發現——verify 過、import 過，遊戲卻在那一幕卡住。
+  對策：把受約束的 index 寫進 `HANDOFF.md`，並在 `glossary.txt` 用註解行標記。
 
 ## 工具鏈事故
 
