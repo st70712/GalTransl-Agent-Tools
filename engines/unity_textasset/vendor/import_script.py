@@ -212,6 +212,8 @@ def cmd_verify(args) -> int:
         if not orig_path.exists():
             errors.append(f"{rel}: 原始資料裡沒有這個檔案")
             continue
+        if "/Managed/" in f"/{rel}" and rel.endswith(".dll"):
+            continue  # package 的 dll_strings 步驟產物（patch_dll_strings.py 自己回讀驗證）
         if rel not in known and not rel.endswith((".assets", ".unity3d")):
             errors.append(f"{rel}: 不是本轉接器會產生的檔案")
             continue

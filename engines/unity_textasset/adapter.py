@@ -205,11 +205,39 @@ class UnityTextAssetAdapter(StandardCliAdapter):
             return self.run(cmd, log_name="tmp_font_dynamic", logs_dir=p.logs)
         return StepResult(ok=True, summary="字型步驟完成")
 
+    def dll_step(self, p: Project) -> StepResult:
+        """rules 檔的 dll_strings：把 Managed/<dll> 寫死的顯示文字／台詞比對常數原地換成譯文（vendor/patch_dll_strings.py），
+        輸出到 translated/<*_Data>/Managed/<dll>。沒有 dll_strings 就跳過。"""
+        import json
+        r = self.rules_path(p)
+        if not r:
+            return StepResult(ok=True, summary="沒有規則檔")
+        spec = (json.loads(r.read_text(encoding="utf-8")).get("dll_strings") or {})
+        dlls = [k for k in spec if k.endswith(".dll")]
+        if not dlls:
+            return StepResult(ok=True, summary="規則檔沒有 dll_strings")
+        data_dir = self._data_dir(p)
+        if data_dir is None:
+            return StepResult(ok=False, summary="沒有 data_dir 資訊")
+        for name in dlls:
+            src = data_dir / "Managed" / name
+            if not src.exists():
+                return StepResult(ok=False, summary=f"找不到 {src}")
+            dst = p.translated / data_dir.name / "Managed" / name
+            res = self.run([self.python, self.vendor("patch_dll_strings.py"), src, "-o", dst, "--map", r],
+                           log_name="patch_dll", logs_dir=p.logs)
+            if not res.ok:
+                return res
+        return StepResult(ok=True, summary=f"DLL 字串已覆蓋：{', '.join(dlls)}")
+
     def package(self, p: Project) -> StepResult:
         m = p.match()
         if not p.translated.exists() or not any(p.translated.rglob("*")):
             return StepResult(ok=False, summary="translated/ 是空的：沒有任何譯文變動，或尚未 import")
         r = self.font_step(p)
+        if not r.ok:
+            return r
+        r = self.dll_step(p)
         if not r.ok:
             return r
         changed = [x for x in p.translated.rglob("*") if x.is_file()]
@@ -229,7 +257,9 @@ class UnityTextAssetAdapter(StandardCliAdapter):
         container = self._container(p)
         if container == "bundle":
             variant_note = (f"{BUNDLE_NAME} 是整個遊戲的資產包（文字、字型設定都在裡面），直接覆蓋同路徑檔案；"
-                            "體積大（百 MB 級）是正常的。若開遊戲就崩潰，多半是重新打包的 bundle 不被接受，請回報並附 crash.dmp／Player.log。")
+                            "體積大（百 MB 級）是正常的。若開遊戲就崩潰，多半是重新打包的 bundle 不被接受，請回報並附 crash.dmp／Player.log。"
+                            + ("Managed 底下的 .dll 是遊戲程式，裡面寫死的提示文字與『認台詞』的常數已換成中文，要一起覆蓋，否則開場黑幕不會淡出。"
+                               if any(x.endswith(".dll") for x in rels) else ""))
         else:
             variant_note = ("resources.assets 是文字資料；sharedassets0.assets 是把 TextMeshPro 字型改成動態造字（用遊戲內嵌的 NotoSansJP 字型檔即時產生缺字）。"
                             "兩個檔案要一起換。若仍有個別字顯示成方框，是內嵌字型檔本身沒有那個字，請回報。")
