@@ -151,6 +151,12 @@
 3. Windows 上 UnityPy 開著的散檔 `unlink` 會 PermissionError（RJ01483219 迴歸時撞到）；roundtrip 不刪暫存檔。
 4. `packer="original"` 對 LZ4HC 是 NotImplemented → 明確 `"lz4"`。
 5. verify 曾對 MonoBehaviour 葉節點差異數設上限 2000（防「結構整個變了」），全量導入 2774 條合法譯文就被誤攔。結構壞掉 `tree_diff` 本來就只回一筆，上限已拿掉。
+6. **`package` 之後再跑 `verify` 一定會紅，那不是壞掉**（2026-09-16 重跑時確認）：`package` 的 `font_inject`／`tmp_dynamic_font`
+   直接寫進 `translated/`，所以 `translated/` 最後留下的是「譯文＋字型注入」的版本。verify 比 `extracted/` 對 `translated/`，
+   就會報 `#902 (Font)`、`#3693/#3697 (MonoBehaviour)`「非文字物件的內容改變了」——那正是我們**故意**改的字型與 TMP 參照。
+   verify 這一關要量的是「譯文導入沒有破壞結構」，所以要重新量就先 `agt import <game>` 把 `translated/` 還原成純譯文版再 `verify`
+   （實測 0 錯誤 0 警告）。字型改動的安全性由 G6／G9 的使用者實機目視負責，不是 verify。
+   推論：`agt status` 上這一關的 ✗ 若時間點在 `package` 之後，先看是不是這個原因，不要當成補丁不安全。
 
 ### 程式碼寫死的字串（DLL）——本例最大的坑
 - **翻完後畫面全黑，不是 bundle 壞掉**：二分（N 純重存有圖、T 只翻 TopicCatalog 就黑）後用 `scan_dll_strings.py` 掃 `ProjectRuntime.dll`，
