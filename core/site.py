@@ -126,6 +126,9 @@ def probe() -> SiteReport:
     caps["handoff_dir_set"] = bool(hd)
     caps["handoff_dir_exists"] = bool(hd) and Path(hd).is_dir()
     details["handoff_dir"] = hd or "（未設：交接包留在 projects/<game>/handoff/，由使用者手動搬）"
+    pa = cfg.get("peer_agent", "").strip()
+    caps["peer_agent_set"] = bool(pa)
+    details["peer_agent"] = pa or "（未設：pack 後只能請使用者人工轉述通知）"
     head = git_head()
     caps["git_ok"] = head is not None
     details["git_head"] = (head or "?")[:12]
@@ -177,6 +180,7 @@ def format_report(r: SiteReport) -> str:
         f"  {yn(r.caps['uv'])} uv              {r.details['uv']}",
         f"  {yn(r.caps['symlink_ok'])} symlink_ok      （✗ 時 init/prepare 退回 junction）",
         f"  {yn(r.caps['handoff_dir_exists'])} handoff_dir     {r.details['handoff_dir']}",
+        f"  {yn(r.caps['peer_agent_set'])} peer_agent      {r.details['peer_agent']}",
         f"  {yn(r.caps['git_ok'])} git             HEAD {r.details['git_head']}",
     ]
     if r.engine_envs:
