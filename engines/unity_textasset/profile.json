@@ -122,6 +122,7 @@
       "copy_changed_assets",
       "font_inject",
       "tmp_dynamic_font（散檔建置）",
+      "dll_strings（rules 檔有宣告時）",
       "write_install_notes"
     ],
     "deliverables": {
@@ -134,7 +135,8 @@
         "*_Data/sharedassets0.assets（動態字型）"
       ],
       "mono+bundle": [
-        "*_Data/data.unity3d（整個資產包：文字＋字型設定，百 MB 級）"
+        "*_Data/data.unity3d（整個資產包：文字＋字型設定，百 MB 級）",
+        "*_Data/Managed/<遊戲>.dll（rules 有 dll_strings 時）"
       ]
     },
     "font_doc": "TextMeshPro 靜態字型圖集缺字會顯示方框；smoke build 必看。對策兩種（一次只用一種）：font_inject（備援字型注入，任何建置）與 tmp_dynamic_font（靜態圖集動態化，散檔建置）。",
@@ -153,6 +155,9 @@
       "font": "font/NotoSansJP-Regular.otf",
       "into": "LiberationSans",
       "args": []
+    },
+    "dll_strings": {
+      "_doc": "rules/<專案名>.json 的 dll_strings 區塊：{\"<dll 名>\": {\"原字串\": \"譯文\"}}；package 用 vendor/patch_dll_strings.py 原地覆蓋 Managed/<dll> 的 #US 字串堆，交付物多一個 dll。先用 vendor/scan_dll_strings.py 找拿台詞原文做比對／寫死顯示文字的常數。"
     }
   },
   "acceptance_checklist": [
@@ -161,7 +166,8 @@
     "選項、話題標題、道具／技能說明、開場 UI（同意畫面）",
     "<param#her_name> 之類的佔位符有被換成名字，不是字面顯示",
     "多行對話沒有超出訊息框",
-    "說話者名字牌顯示譯名，立繪／表情／語音正常（名字牌與立繪鍵是不同欄位）"
+    "說話者名字牌顯示譯名，立繪／表情／語音正常（名字牌與立繪鍵是不同欄位）",
+    "開場／轉場的黑幕會淡出、提示句是中文（程式碼寫死的字串已由 dll_strings 覆蓋）"
   ],
   "docs": [
     "engines/unity_textasset/NOTES.md",

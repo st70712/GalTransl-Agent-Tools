@@ -131,7 +131,7 @@
 - `import` 只重寫整個 `data.unity3d`（`save(packer="lz4")`，約 40 秒、165 MB；原檔 LZ4HC，UnityPy 沒有 HC 編碼器）；`verify` 展開 bundle 逐內部檔比對：
   未涵蓋物件 raw 相同、規則涵蓋的 MonoBehaviour 只有規則路徑上的字串葉節點可以不同、`.resS` 雜湊相同。
 - `breakage`：刪掉 `mTopics[0].mLines` 最後一個元素 → verify 報「不在規則內的欄位被改了（長度 33 → 32）」✓。
-- 交付物：`騙され呑みニケーション_Data/data.unity3d`（165–169 MB）→ zip 放 `<handoff_dir>/RJ01657316/`；安裝說明備份行 `ren data.unity3d data.unity3d.orig`。
+- 交付物：`騙され呑みニケーション_Data/data.unity3d`（165–169 MB）＋ `騙され呑みニケーション_Data/Managed/ProjectRuntime.dll`（字串堆已改）→ zip 放 `<handoff_dir>/RJ01657316/`；安裝說明備份行 `ren data.unity3d data.unity3d.orig`。
 - 字型（見下）：`profile.patch.font_inject` 在 `package` 時自動跑 `inject_font.py`，字型檔在 `projects/RJ01657316/font/NotoSansJP-Regular.otf`
   （用 `extract_font.py` 從 RJ01483219 抽出，不進 git）。
 
@@ -152,9 +152,20 @@
 4. `packer="original"` 對 LZ4HC 是 NotImplemented → 明確 `"lz4"`。
 5. verify 曾對 MonoBehaviour 葉節點差異數設上限 2000（防「結構整個變了」），全量導入 2774 條合法譯文就被誤攔。結構壞掉 `tree_diff` 本來就只回一筆，上限已拿掉。
 
+### 程式碼寫死的字串（DLL）——本例最大的坑
+- **翻完後畫面全黑，不是 bundle 壞掉**：二分（N 純重存有圖、T 只翻 TopicCatalog 就黑）後用 `scan_dll_strings.py` 掃 `ProjectRuntime.dll`，
+  `Scene1Context.IsIntroBlackoutFadeLine` 是 `mText.Contains("同じサークルに所属する") && mText.Contains("先輩と後輩")`——開場黑幕靠認出第四句台詞才淡出。
+- 同類：`GetSpeakerColor`／`ResolveSpeakerColor` 用 `speaker == "後輩"`／`== "あなた"` 分色；`EnterTopicSelection`／`EnterOrderSelection`／`ShowSensitivityTooLowLine`
+  的提示句與說話者「あなた」寫死在 DLL（`ShowStaticLine`）；tooltip「酒を口に含む」。
+- 對策：`rules/RJ01657316.json` 的 `dll_strings` → `package` 的 `dll_step` 用 `patch_dll_strings.py` 原地覆蓋 #US 字串堆（新字串 UTF-16 長度 ≤ 原字串），
+  交付物多一個 `Managed/ProjectRuntime.dll`。**「同じサークルに所属する」「先輩と後輩」的譯文必須是第四句譯文的子字串**（現在是「他們同屬一個社團」「學長和學妹」）——翻譯端改那句要一起改規則檔。
+- 通則：每款 Unity 遊戲 G3 抽樣時順手跑 `scan_dll_strings.py <Managed/遊戲.dll>`，看 `next=` 有 `String::Contains`／`StartsWith`／`op_Equality`／`ShowStaticLine`／`SetText` 的日文常數。IL2CPP 沒有這條路（字串在 global-metadata.dat，要另外做）。
+
 ### 實機驗收
 - 原版 playtest 15 s 存活；V0（假譯文 12 條，只重存 bundle）20 s 存活；A（V0 + 字型注入）20 s 存活，無 crash.dmp／Player.log（2026-09-12 20:33）。
 - **使用者目視變體 A 通過（2026-09-12 20:45）**：開場旁白中文正常，你／她／嗎／戶／溫／另 全部畫出——重存的 bundle 遊戲吃、TopicCatalog 譯文生效、備援字型注入生效。
   瑕疵：備援字是 Noto **Regular**，對話主字型是 NotoSansJP-**Bold** 靜態圖集，缺字部分肉眼可見細一號；要一致得注入 Bold 版字型檔（TMP 備援不會套粗體）。
   同意畫面（level0 的 TextMeshProUGUI）這次沒出現——推測首次開原版時已回答過、狀態存在 LocalLow/Unity/ 之下；UI 譯文是否顯示要等清除狀態或翻譯端 smoke 再看。
   已 `mark user_boot_ok`；翻譯端可依 CLAUDE.md §6 例外自行 mark 直接進 G7。
+- 2026-09-15 二分：N（純重存）、N2（旗標仿原檔）有圖；T（只翻 TopicCatalog）黑 → DLL 台詞比對（見上）。
+- **最終版 D（bundle + DLL）使用者目視通過（2026-09-15）**：第四句黑幕淡出、立繪背景正常、話題提示句中文、名字牌分色正常。`user_final_ok`。

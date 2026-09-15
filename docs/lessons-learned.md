@@ -73,6 +73,13 @@
 - **一棒制在同機測試也要守**：實機端本地做「假譯文 smoke」（12 條含 你她嗎 的假譯文 + 字型注入）驗證管線與 bundle 可開，用的是 `script.json` 的副本，
   `exported/` 一個位元組都沒動，交接包裡的東西仍是翻譯端的。
 
+- **程式碼會拿台詞原文當開關**（RJ01657316，2026-09-15）：翻完後整場黑畫面，二分證明 bundle 沒問題、只翻 `TopicCatalog` 就黑；
+  DLL 裡 `mText.Contains("同じサークルに所属する")` 決定開場黑幕何時淡出。同款還有 speaker 分色用 `== "あなた"`、三句提示台詞直接寫死。
+  對策是原地改 DLL 字串堆（`scan_dll_strings.py` 找、`patch_dll_strings.py` 覆蓋，新字串不能比原字串長），交付物多一個 DLL。
+  **G3 抽樣清單要加一項：掃遊戲程式的字串常數，找拿顯示文字做比對的地方**——不是 Unity 專屬，Wolf／RPG Maker 事件腳本用字串比較分支也是同一類。
+- **package 之後要驗交付檔內容，不是只驗 translated/**：font_inject 的 `--base` 路徑算錯，從原版注入字型蓋掉譯文，verify 早就過了、交付檔卻是日文。
+  verify 綁在 import 後、字型／DLL 步驟在 package 時才跑，中間沒人再看一眼。
+
 ## 兩站接力（實機端 Windows ↔ 翻譯端 dgxluna，2026-09-12）
 
 - **碰遊戲檔的步驟與碰模型的步驟可以完全分開**：translate／fix_text／check_codes／validate 只讀 `exported/` + sidecar + profile，

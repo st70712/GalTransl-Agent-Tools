@@ -114,6 +114,7 @@ uv 0.12.13（`pip install uv`）；開發人員模式＝**關**；Git Bash＝git
 | 字型量測 | 完成 | 三套靜態 TMP 圖集 7129 字，對 Big5 常用字 81.7%（缺 989）；NotoSansJP OTF 97.7%（缺 122）→ 對策 A 備援字型注入（`inject_font.py`） |
 | playtest | 通過 | 原版 15 s、V0（假譯文 12 條，只重存 bundle）20 s、A（V0＋字型注入）20 s 都存活、無 crash.dmp；目視待使用者 |
 | 交接包 #1 | 見 HANDOFF.md | `projects/RJ01657316/HANDOFF.md` 寫明翻譯端要先 checkout 分支 |
+| 收包 #2 → 交付 | 通過（修兩個 bug） | (1) `font_inject --base` 用錯目錄名 → 譯文被原版蓋掉；(2) 翻完整場黑畫面 → DLL 用 `Contains("同じサークルに所属する")` 決定黑幕淡出，新增 `scan_dll_strings.py`／`patch_dll_strings.py`。最終 D 變體使用者目視通過，`user_final_ok`（2026-09-15） |
 
 ## 6. 收尾（筆電端）
 
