@@ -198,6 +198,50 @@ class HandoffRoundTrip(unittest.TestCase):
         self.assertTrue(r.copied_to.exists())
         self.assertEqual(r.copied_to.parent, shared / "demo" / "handoff")
 
+    def test_11_pack_records_bundle_digest(self):
+        shared = self.tmp / "shared11"
+        shared.mkdir()
+        with mock.patch.dict(os.environ, {"AGT_HANDOFF_DIR": str(shared)}):
+            r = handoff.pack(self.ws, "translator", from_site="workstation")
+        self.assertEqual(r.size, r.bundle.stat().st_size)
+        self.assertEqual(r.sha256, fsutil.sha256_file(r.bundle))
+        self.assertTrue(r.copy_verified)
+        self.assertIsNotNone(r.sidecar)
+        self.assertEqual(r.sidecar.read_text(encoding="utf-8"), f"{r.sha256}  {r.bundle.name}\n")
+        # 整包 digest 只能活在 zip 外面：記進本機 agt.json 讓 notify 之後還拿得到
+        info = state.handoff_info(self.ws.state_path)
+        self.assertEqual((info["bundle_sha256"], info["bundle_size"]), (r.sha256, r.size))
+
+    def test_12_pack_detects_bad_drive_copy(self):
+        shared = self.tmp / "shared12"
+        shared.mkdir()
+
+        def half_copy(src, dst, *a, **kw):          # Drive 只寫進去一半
+            Path(dst).write_bytes(Path(src).read_bytes()[:100])
+            return dst
+
+        with mock.patch.dict(os.environ, {"AGT_HANDOFF_DIR": str(shared)}), \
+             mock.patch.object(handoff.shutil, "copy2", half_copy):
+            r = handoff.pack(self.ws, "translator", from_site="workstation")
+        self.assertFalse(r.copy_verified)           # pack 不拋例外，只回報
+        self.assertIsNone(r.sidecar)                # 驗不過就不寫旁檔，免得對方以為可以收
+        self.assertTrue(any("與本機不符" in w for w in r.warnings), r.warnings)
+
+    def test_13_pack_survives_copy_oserror(self):
+        shared = self.tmp / "shared13"
+        shared.mkdir()
+
+        def boom(*a, **kw):
+            raise OSError("磁碟已滿")
+
+        with mock.patch.dict(os.environ, {"AGT_HANDOFF_DIR": str(shared)}), \
+             mock.patch.object(handoff.shutil, "copy2", boom):
+            r = handoff.pack(self.ws, "translator", from_site="workstation")
+        # seq 已經消耗掉了，複製失敗絕不能拋例外（否則使用者重跑會跳號）
+        self.assertTrue(r.bundle.exists())
+        self.assertIsNone(r.copied_to)
+        self.assertTrue(any("請手動搬" in w for w in r.warnings), r.warnings)
+
 
 class MergeStates(unittest.TestCase):
     def test_pick_latest_one_level_down_and_shallow_wins(self):

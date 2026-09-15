@@ -92,6 +92,8 @@ class PackResult:
     warnings: list[str] = field(default_factory=list)
     size: int = 0
     sha256: str = ""
+    copy_verified: bool | None = None       # 共用資料夾的複本重讀後與本機相同？沒複製時是 None
+    sidecar: Path | None = None             # 複本旁邊的 .sha256（sha256sum -c 相容）
 
 
 @dataclass
@@ -220,18 +222,38 @@ def pack(p: Project, to: str, *, from_site: str, out_dir: Path | None = None,
     state.update_handoff(p.state_path, {"bundle_sha256": digest.sha256, "bundle_size": digest.size})
 
     copied_to: Path | None = None
+    copy_verified: bool | None = None
+    sidecar: Path | None = None
     cfg_dir = config.load_config().get("handoff_dir", "").strip()
     if cfg_dir:
         shared = config.handoff_dir()
         if shared is None:
             warnings.append(f"handoff_dir={cfg_dir} 不存在（Drive 沒掛載？）；交接包只留在本機，請手動搬")
         else:
-            dst_dir = shared / p.name / "handoff"
-            dst_dir.mkdir(parents=True, exist_ok=True)
-            copied_to = dst_dir / name
-            shutil.copy2(bundle, copied_to)
+            try:
+                dst_dir = shared / p.name / "handoff"
+                dst_dir.mkdir(parents=True, exist_ok=True)
+                copied_to = dst_dir / name
+                shutil.copy2(bundle, copied_to)
+                # 重讀一次比對（一次，不是輪詢）。誠實的界線：這只證明本機寫入完整，
+                # 不證明雲端已上傳完——擋得住的是截斷、磁碟滿、防毒攔截、Drive 佔位檔寫入異常。
+                copy = digest_bundle(copied_to)
+                copy_verified = (copy.size, copy.sha256) == (digest.size, digest.sha256)
+                if copy_verified:
+                    sidecar = copied_to.parent / (copied_to.name + ".sha256")
+                    sidecar.write_text(f"{digest.sha256}  {name}\n", encoding="utf-8")
+                else:
+                    warnings.append(f"共用資料夾的複本與本機不符（{copy.size:,} vs {digest.size:,} bytes）"
+                                    "——重新複製或改手動搬；先不要叫對方收")
+            except OSError as e:
+                # seq 已經在上面消耗掉了，這裡拋例外最糟（使用者重跑會跳號）。本機 zip 已經生出來了，
+                # 降級成警告請使用者手動搬即可。
+                warnings.append(f"複製到共用資料夾失敗：{e}；交接包在本機 {bundle}，請手動搬")
+                copied_to = None
+                copy_verified = None
     return PackResult(bundle=bundle, seq=seq, to=to, files=[arc for _, arc in files],
-                      copied_to=copied_to, warnings=warnings, size=digest.size, sha256=digest.sha256)
+                      copied_to=copied_to, warnings=warnings, size=digest.size, sha256=digest.sha256,
+                      copy_verified=copy_verified, sidecar=sidecar)
 
 
 # -- classify / unpack ----------------------------------------------------------

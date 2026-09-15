@@ -367,9 +367,16 @@ def cmd_handoff(a) -> int:
         except handoff.HandoffError as e:
             sys.exit(f"✗ {e}")
         print(f"✓ 交接包 #{r.seq} → {to}：{r.bundle}（{len(r.files)} 個檔案）")
+        print(f"  size {r.size:,} bytes   sha256 {r.sha256}")
         if r.copied_to:
             print(f"  已複製到共用資料夾：{r.copied_to}")
-            print("  （rclone／Drive 桌面版可能延遲上傳；交給使用者前 ls -la 確認大小一致）")
+            if r.copy_verified:
+                print("  複本已重讀比對：size 與 sha256 都相同"
+                      "（只證明本機寫入完整，**不**證明 Drive／rclone 已上傳完）")
+            if r.sidecar:
+                print(f"  校驗旁檔：{r.sidecar.name}（對方可 sha256sum -c）")
+            print(f"  → 對方收之前應該先驗：agt handoff check {p.name} "
+                  f"--expect-sha256 {r.sha256} --expect-size {r.size}")
         else:
             print("  沒有 handoff_dir：請把這個 zip 交給使用者搬到另一站（或放 config.local.yaml 的 handoff_dir）")
         for w in r.warnings:
