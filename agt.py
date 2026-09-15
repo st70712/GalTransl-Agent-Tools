@@ -31,6 +31,7 @@ from core import (  # noqa: E402
     config,
     fsutil,
     handoff,
+    handoff_notes,
     merge,
     registry,
     script_json,
@@ -319,6 +320,67 @@ def cmd_env(a) -> int:
     return 0
 
 
+def _read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def _print_notice(notice, peer: str) -> None:
+    """印出可直接 SendMessage 的草稿；agt.py 自己永遠不送訊息（送訊息是代理的動作，受權限管）。"""
+    print()
+    print(handoff_notes.block(notice))
+    for w in notice.warnings:
+        print(f"  ! {w}")
+    if peer:
+        print(f"→ 用 SendMessage 把上面整段送給 {peer}"
+              "（先 ListAgents 確認名字還在；找不到就把同一段交給使用者人工轉述）")
+    else:
+        print("→ config.local.yaml 沒設 peer_agent：把上面整段交給使用者請他轉述"
+              "（設定方式見 config.local.example.yaml）")
+
+
+def _handoff_notify(a, here: str) -> int:
+    """重印交接通知／回報草稿。訊息送不出去時用這個——重跑 pack 會 seq+1，絕對不可以。"""
+    p = _project(a.game)
+    info = state.handoff_info(p.state_path)
+    seq = int(info.get("seq") or 0)
+    peer = config.peer_agent()
+    if not seq:
+        sys.exit(f"✗ {a.game} 還沒交接過（agt.json 沒有 handoff 區塊）：先 agt handoff pack {a.game}")
+    if a.ack:
+        _print_notice(handoff_notes.build_ack_message(
+            game=p.name, seq=seq, to_site=here, created=False,
+            written=int(info.get("unpacked_files") or 0), backups=int(info.get("unpacked_backups") or 0),
+            sha256=str(info.get("bundle_sha256") or ""), note=a.note or "", script=str(p.script)), peer)
+        return 0
+
+    warnings: list[str] = []
+    name = str(info.get("bundle") or "")
+    size, sha = int(info.get("bundle_size") or 0), str(info.get("bundle_sha256") or "")
+    try:
+        found = handoff.resolve_bundle(a.game, site=str(info.get("holder") or "") or None)
+        if name and found.name != name:
+            warnings.append(f"找到的是 {found.name}，但 agt.json 記的是 {name}——確認是不是同一包")
+        d = handoff.digest_bundle(found)
+        name, size, sha = found.name, d.size, d.sha256
+    except handoff.HandoffError as e:
+        warnings.append(f"找不到交接包檔案（{e}）；用的是 pack 當時記在 agt.json 的雜湊")
+    if not sha:
+        sys.exit(f"✗ 沒有整包 sha256：{name or a.game} 是舊版 pack 出來的，重新 pack 一次才會記錄")
+
+    git = handoff.repo_info()
+    notice = handoff_notes.build_pack_message(
+        game=p.name, seq=seq, from_site=str(info.get("from_site") or here),
+        to_site=str(info.get("holder") or site.other_site(here) or "?"),
+        bundle_name=name, size=size, sha256=sha, handoff_md=_read_text(p.root / "HANDOFF.md"),
+        repo_branch=git.get("branch") or "", repo_head=git.get("head") or "")
+    notice.warnings[:0] = warnings
+    _print_notice(notice, peer)
+    return 0
+
+
 def _handoff_check(a, here: str) -> int:
     """唯讀驗證交接包：Drive／rclone 同步完了沒、是不是通知訊息講的那一包。"""
     filt = here if here in site.SITES else None
@@ -382,9 +444,17 @@ def cmd_handoff(a) -> int:
         for w in r.warnings:
             print(f"  ! {w}")
         print(f"→ 持棒方現在是 {to}：收到回傳包前，本站不要再改 exported/script.json")
+        git = handoff.repo_info()
+        _print_notice(handoff_notes.build_pack_message(
+            game=p.name, seq=r.seq, from_site=here, to_site=to, bundle_name=r.bundle.name,
+            size=r.size, sha256=r.sha256, handoff_md=_read_text(p.root / "HANDOFF.md"),
+            repo_branch=git.get("branch") or "", repo_head=git.get("head") or ""),
+            config.peer_agent())
         return 0
     if a.action == "check":
         return _handoff_check(a, here)
+    if a.action == "notify":
+        return _handoff_notify(a, here)
     # unpack
     try:
         r = handoff.unpack(Path(a.src), game=a.game, force=a.force, site=here if here in site.SITES else None,
@@ -400,10 +470,12 @@ def cmd_handoff(a) -> int:
     print(state.format_state(state.load_state(p.state_path)))
     if (p.root / "HANDOFF.md").exists():
         print(f"→ 先讀 projects/{p.name}/HANDOFF.md 的最新一段「請對方做」")
-    if here == "translator":
-        print(f"→ 翻譯端：$PYT tools/translate.py -i {p.script} [--limit 20 --filter …] → fix_text → check-codes → validate → agt handoff pack {p.name}")
-    elif here == "workstation":
-        print(f"→ 實機端：agt import {p.name} → verify → package → 裝進遊戲 → agt playtest {p.name} → 使用者目視 → mark → handoff pack")
+    print(f"→ {handoff_notes.next_steps(here, p.name, str(p.script))}")
+    _print_notice(handoff_notes.build_ack_message(
+        game=p.name, seq=r.seq, to_site=here, created=r.created, written=len(r.files),
+        backups=len(r.backups), warnings=r.warnings, script=str(p.script),
+        check_ok=True if (a.expect_sha256 or a.expect_size) else None,
+        sha256=a.expect_sha256 or ""), config.peer_agent())
     return 0
 
 
@@ -490,6 +562,10 @@ def build_parser() -> argparse.ArgumentParser:
     hc.add_argument("target", help="遊戲名（自動找 handoff_dir）、交接包 zip，或放交接包的資料夾")
     hc.add_argument("--expect-sha256", help="通知訊息裡的整包 sha256")
     hc.add_argument("--expect-size", type=int, help="通知訊息裡的整包 size")
+    hn = hs.add_parser("notify", help="重印交接通知／回報草稿（訊息送不出去時用；重跑 pack 會 seq+1）")
+    hn.add_argument("game")
+    hn.add_argument("--ack", action="store_true", help="產生收包回報，而不是交接通知")
+    hn.add_argument("--note", help="附加一句話")
     s.set_defaults(func=cmd_handoff)
 
     s = sub.add_parser("playtest", help="實機端：啟動遊戲、等 N 秒、列出新的 crash.dmp／Player.log")

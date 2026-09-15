@@ -587,6 +587,10 @@ def unpack(src: Path, projects_dir: Path | None = None, *, game: str | None = No
         dst.write_bytes(data)
         written.append(rel)
 
+    # 記下來讓 `handoff notify --ack` 事後還重印得出同一份回報
+    state.update_handoff(p.state_path, {"unpacked_at": _now(), "unpacked_files": len(written),
+                                        "unpacked_backups": len(backups)})
+
     local = repo_info()
     if manifest.get("repo_head") and local["head"] and manifest["repo_head"] != local["head"]:
         warnings.append(f"兩站 repo 不同步：對方 HEAD {manifest['repo_head'][:12]}，本機 {local['head'][:12]}——先 git pull 再繼續")
